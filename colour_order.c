@@ -3,6 +3,7 @@
 
 #include "c_program_timing.h"
 #include "graph.h"
+#include "sorting.h"
 
 #include <argp.h>
 #include <limits.h>
@@ -15,25 +16,6 @@
 typedef unsigned long long ULL;
 
 #define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
-
-#define INSERTION_SORT(type, arr, arr_len, swap_condition) do { \
-    for (int i=1; i<arr_len; i++) {                             \
-        for (int j=i; j>=1; j--) {                              \
-            if (swap_condition) {                               \
-                type tmp = arr[j-1];                            \
-                arr[j-1] = arr[j];                              \
-                arr[j] = tmp;                                   \
-            } else {                                            \
-                break;                                          \
-            }                                                   \
-        }                                                       \
-    }                                                           \
-} while(0);
-
-#define INSERTION_SORT_VV(key_function)                                        \
-    INSERTION_SORT(int, vv, g->n,                                              \
-        (key_function(g, vv[j-1]) > key_function(g, vv[j]) ||                  \
-        (key_function(g, vv[j-1])==key_function(g, vv[j]) && vv[j-1]>vv[j])))
 
 static void fail(char* msg) {
     printf("%s\n", msg);
@@ -51,13 +33,6 @@ static struct argp_option options[] = {
             "Quiet output"},
     {"tavares-colour", 't', 0, 0,
             "Tavares-style colouring"},
-    {"singletons-at-end", 'e', 0, 0,
-            "Move singleton colour classes to end of list "
-            "(only if using Tavares-style colouring)"},
-    {"sorted-colour", 's', 0, 0,
-            "Sort colour classes in descending order of size (only if not using Tavares-style colouring"},
-    {"experimental-candidate-deletion", 'x', 0, 0,
-            "Try to delete some vertices using colouring before the main colouring step"},
     {"verbose-level", 'v', "LEVEL", 0,
             "Report progress up to level LEVEL of search tree"},
     {"vtx-ordering", 'o', "ORDER", 0,
@@ -70,9 +45,6 @@ static struct argp_option options[] = {
 static struct {
     bool quiet;
     bool tavares_colour;
-    bool singletons_at_end;
-    bool experimental;
-    bool sorted_colour;
     int verbose_level;
     int vtx_ordering;
     char *filename;
@@ -82,8 +54,6 @@ static struct {
 void set_default_arguments() {
     arguments.quiet = false;
     arguments.tavares_colour = false;
-    arguments.singletons_at_end = false;
-    arguments.experimental = false;
     arguments.verbose_level = 0;
     arguments.vtx_ordering = 0;
     arguments.filename = NULL;
@@ -97,15 +67,6 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state) {
             break;
         case 't':
             arguments.tavares_colour = true;
-            break;
-        case 'e':
-            arguments.singletons_at_end = true;
-            break;
-        case 's':
-            arguments.sorted_colour = true;
-            break;
-        case 'x':
-            arguments.experimental = true;
             break;
         case 'v':
             arguments.verbose_level = atoi(arg);
@@ -242,11 +203,6 @@ struct {
     struct UnweightedVtxList P[MAX_N];
 } prealloc;
 
-struct Singletons {
-    int v;
-    long wt;
-};
-
 void tavares_colouring_bound(struct UnweightedVtxList *P, long *cumulative_wt_bound) {
     ULL to_colour[WORDS_PER_BITSET];
     ULL candidates[WORDS_PER_BITSET];
@@ -274,9 +230,6 @@ void tavares_colouring_bound(struct UnweightedVtxList *P, long *cumulative_wt_bo
 
     P->size = 0;
 
-    struct Singletons singletons[MAX_N];
-    int singletons_len = 0;
-
     while ((v=last_set_bit(to_colour, numwords))!=-1) {
         numwords = v/BITS_PER_WORD+1;
         copy_bitset(to_colour, candidates, numwords);
@@ -295,30 +248,16 @@ void tavares_colouring_bound(struct UnweightedVtxList *P, long *cumulative_wt_bo
             // The next line also removes v from the bitset
             reject_adjacent_vertices(candidates, bitadj[v], v/BITS_PER_WORD+1);
         }
-        if (arguments.singletons_at_end && col_class_size==1) {
-            singletons[singletons_len].v = col_class[0];
-            singletons[singletons_len].wt = class_min_wt;
-            singletons_len++;
-        } else {
-            bound += class_min_wt;
-            for (int i=0; i<col_class_size; i++) {
-                int w = col_class[i];
-                residual_wt[w] -= class_min_wt;
-                if (residual_wt[w] > 0) {
-                    set_bit(to_colour, w);
-                } else {
-                    cumulative_wt_bound[P->size] = bound;
-                    P->vv[P->size++] = w;
-                }
+        bound += class_min_wt;
+        for (int i=0; i<col_class_size; i++) {
+            int w = col_class[i];
+            residual_wt[w] -= class_min_wt;
+            if (residual_wt[w] > 0) {
+                set_bit(to_colour, w);
+            } else {
+                cumulative_wt_bound[P->size] = bound;
+                P->vv[P->size++] = w;
             }
-        }
-    }
-    if (arguments.singletons_at_end) {
-        INSERTION_SORT(struct Singletons, singletons, singletons_len, (singletons[j-1].wt > singletons[j].wt))
-        for (int i=0; i<singletons_len; i++) {
-            bound += singletons[i].wt;;
-            cumulative_wt_bound[P->size] = bound;
-            P->vv[P->size++] = singletons[i].v;
         }
     }
 }
@@ -456,56 +395,8 @@ void expand(struct VtxList *C, struct UnweightedVtxList *P, struct VtxList *incu
 
     long cumulative_wt_bound[MAX_N];
 
-    struct UnweightedVtxList *new_P0 = &prealloc.P[level];
-
-    if (arguments.experimental) {
+    if (arguments.tavares_colour)
         tavares_colouring_bound(P, cumulative_wt_bound);
-        if (P->size==0 || C->total_wt + cumulative_wt_bound[P->size-1] <= incumbent->total_wt) {
-            return;
-        }
-
-//        printf("%d ", P->size);
-        bool found_keeper = false;
-        for (int i=P->size-1; i>=0; i--) {
-            if (C->total_wt + cumulative_wt_bound[i] <= incumbent->total_wt && !found_keeper) {
-                //printf(":-)\n");
-                return;
-            }
-
-            int v = P->vv[i];
-
-            new_P0->size = 0;
-            for (int j=0; j<P->size; j++) {
-                int w = P->vv[j];
-                if (adjacent[v][w]) {
-                    new_P0->vv[new_P0->size++] = w;
-                }
-            }
-
-            push_vtx(C, v);
-            tavares_colouring_bound(new_P0, cumulative_wt_bound);
-            if (C->total_wt + (new_P0->size ? cumulative_wt_bound[new_P0->size-1] : 0) <= incumbent->total_wt) {
-                for (int j=i+1; j<P->size; j++)
-                    P->vv[j-1] = P->vv[j];
-                P->size--;
-            } else {
-                found_keeper = true;
-            }
-            pop_vtx(C);
-        }
-//        printf("%d\n", P->size);
-    }
-
-    if (arguments.tavares_colour) {
-        tavares_colouring_bound(P, cumulative_wt_bound);
-        if (P->size) {
-//            printf("%ld %ld\n", incumbent->total_wt, C->total_wt+
-//                    cumulative_wt_bound[P->size-1]);
-//            printf("%ld\n", incumbent->total_wt - (C->total_wt+
-//                    cumulative_wt_bound[P->size-1]));
-        }
-    } else if (arguments.sorted_colour)
-        sorted_colouring_bound(P, cumulative_wt_bound);
     else
         colouring_bound(P, cumulative_wt_bound);
 

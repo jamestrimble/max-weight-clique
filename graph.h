@@ -19,5 +19,7 @@ struct Graph {
 
 void add_edge(struct Graph *g, int v, int w);
 
+void calculate_all_degrees(struct Graph *g);
+
 // Precondition: *g is already zeroed out
 void readGraph(char* filename, struct Graph* g);

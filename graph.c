@@ -16,6 +16,14 @@ void add_edge(struct Graph *g, int v, int w) {
     g->adjmat[w][v] = true;
 }
 
+void calculate_all_degrees(struct Graph *g) {
+    for (int v=0; v<g->n; v++) {
+        g->degree[v] = 0;
+        for (int w=0; w<g->n; w++)
+            g->degree[v] += g->adjmat[v][w];
+    }
+}
+
 // Precondition: *g is already zeroed out
 void readGraph(char* filename, struct Graph* g) {
     FILE* f;

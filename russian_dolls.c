@@ -74,7 +74,7 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state) {
             break;
         case 't':
             arguments.colouring_type = atoi(arg);
-            if (arguments.colouring_type<0 || arguments.colouring_type>2)
+            if (arguments.colouring_type<0 || arguments.colouring_type>3)
                 fail("Invalid colouring type");
             break;
         case 'c':

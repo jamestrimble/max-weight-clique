@@ -104,18 +104,6 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state) {
 static struct argp argp = { options, parse_opt, args_doc, doc };
 
 /*******************************************************************************
-                                     Stats
-*******************************************************************************/
-
-static struct {
-    long expand_calls;
-} stats;
-
-void initialise_stats() {
-    stats.expand_calls = 0;
-}
-
-/*******************************************************************************
                               Max clique functions
 *******************************************************************************/
 
@@ -244,9 +232,10 @@ long vertex_weight_sum(struct UnweightedVtxList *P)
 
 void expand(struct VtxList *C, struct UnweightedVtxList *P,
         struct VtxList *incumbent, int level,
-        int (*next_vtx_fun)(unsigned long long *, int))
+        int (*next_vtx_fun)(unsigned long long *, int),
+        long *expand_call_count)
 {
-    stats.expand_calls += 1;
+    (*expand_call_count)++;
     if (P->size==0 && C->total_wt>incumbent->total_wt)
         *incumbent = *C;
 
@@ -283,7 +272,7 @@ void expand(struct VtxList *C, struct UnweightedVtxList *P,
         }
 
         push_vtx(C, v);
-        expand(C, new_P, incumbent, level+1, next_vtx_fun);
+        expand(C, new_P, incumbent, level+1, next_vtx_fun, expand_call_count);
         pop_vtx(C);
         if (arguments.colouring_type==0) {
             bound -= weight[v];
@@ -388,7 +377,7 @@ void order_vertices(int *vv, struct Graph *g, int vtx_ordering) {
     }
 }
 
-struct VtxList mc(struct Graph* g) {
+struct VtxList mc(struct Graph* g, long *expand_call_count) {
     int vv[MAX_N];
     order_vertices(vv, g, arguments.vtx_ordering);
 
@@ -413,7 +402,8 @@ struct VtxList mc(struct Graph* g) {
         for (int j=0; j<i; j++)
             if (adjacent[i][j])
                 P.vv[P.size++] = j;
-        expand(&C, &P, &incumbent, 0, arguments.colouring_order ? first_set_bit : last_set_bit);
+        expand(&C, &P, &incumbent, 0, arguments.colouring_order ? first_set_bit : last_set_bit,
+                expand_call_count);
         c[i] = incumbent.total_wt;
         if (!arguments.quiet)
             printf("c[%d]=%ld; Incumbent size: %d\n", i, c[i], incumbent.size);
@@ -430,14 +420,13 @@ int main(int argc, char** argv) {
     set_default_arguments();
     argp_parse(&argp, argc, argv, 0, 0, 0);
 
-    initialise_stats();
-
     struct Graph* g = calloc(1, sizeof(*g));
     readGraph(arguments.filename, g);
 
+    long expand_call_count = 0;
     set_start_time();
     calculate_all_degrees(g);
-    struct VtxList clq = mc(g);
+    struct VtxList clq = mc(g, &expand_call_count);
     long elapsed_msec = get_elapsed_time_msec();
 
     // sort vertices in clique by index
@@ -445,7 +434,7 @@ int main(int argc, char** argv) {
 
     setlocale(LC_NUMERIC, "");
     printf("Weight of max clique: %ld\n", clq.total_wt);
-    printf("Calls to expand():          %'15ld\n", stats.expand_calls);
+    printf("Calls to expand():          %'15ld\n", expand_call_count);
     printf("Time:                       %15ld\n", elapsed_msec);
 
     for (int i=0; i<clq.size; i++)

@@ -17,9 +17,23 @@ struct Graph {
     unsigned long long bitadjmat[MAX_N][WORDS_PER_BITSET];
 };
 
+struct VtxList {
+    long total_wt;
+    int size;
+    int vv[MAX_N];
+};
+
+struct UnweightedVtxList {
+    int size;
+    int vv[MAX_N];
+};
+
 void add_edge(struct Graph *g, int v, int w);
 
 void calculate_all_degrees(struct Graph *g);
+
+// Checks if a set of vertices induces a clique
+bool check_clique(struct Graph* g, struct VtxList* clq);
 
 // Precondition: *g is already zeroed out
 void readGraph(char* filename, struct Graph* g);

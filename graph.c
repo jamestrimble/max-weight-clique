@@ -24,6 +24,21 @@ void calculate_all_degrees(struct Graph *g) {
     }
 }
 
+// Checks if a set of vertices induces a clique
+bool check_clique(struct Graph* g, struct VtxList* clq) {
+    long total_wt = 0;
+    for (int i=0; i<clq->size; i++)
+        total_wt += g->weight[clq->vv[i]];
+    if (total_wt == clq->total_wt)
+        return true;
+
+    for (int i=0; i<clq->size-1; i++)
+        for (int j=i+1; j<clq->size; j++)
+            if (!g->adjmat[clq->vv[i]][clq->vv[j]])
+                return false;
+    return true;
+}
+
 // Precondition: *g is already zeroed out
 void readGraph(char* filename, struct Graph* g) {
     FILE* f;

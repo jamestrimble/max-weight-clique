@@ -185,7 +185,9 @@ struct {
 } prealloc;
 
 // Returns an upper bound on weight from the vertices in P
-long tavares_colouring_bound(struct UnweightedVtxList *P) {
+long tavares_colouring_bound(struct UnweightedVtxList *P,
+        int (*next_vtx_fun)(unsigned long long *, int))
+{
     unsigned long long to_colour[WORDS_PER_BITSET];
     unsigned long long candidates[WORDS_PER_BITSET];
 
@@ -209,8 +211,7 @@ long tavares_colouring_bound(struct UnweightedVtxList *P) {
         residual_wt[v] = weight[v];
     }
 
-    while ((v=last_set_bit(to_colour, numwords))!=-1) {
-        numwords = v/BITS_PER_WORD+1;
+    while ((v=next_vtx_fun(to_colour, numwords))!=-1) {
         copy_bitset(to_colour, candidates, numwords);
         long class_min_wt = residual_wt[v];
         unset_bit(to_colour, v);
@@ -219,14 +220,14 @@ long tavares_colouring_bound(struct UnweightedVtxList *P) {
         col_class[0] = v;
         // The next line also removes v from the bitset
         reject_adjacent_vertices(candidates, bitadj[v], numwords);
-        while ((v=last_set_bit(candidates, v/BITS_PER_WORD+1))!=-1) {
+        while ((v=next_vtx_fun(candidates, numwords))!=-1) {
             if (residual_wt[v] < class_min_wt) {
                 class_min_wt = residual_wt[v];
             }
             unset_bit(to_colour, v);
             col_class[col_class_size++] = v;
             // The next line also removes v from the bitset
-            reject_adjacent_vertices(candidates, bitadj[v], v/BITS_PER_WORD+1);
+            reject_adjacent_vertices(candidates, bitadj[v], numwords);
         }
         for (int i=0; i<col_class_size; i++) {
             int w = col_class[i];
@@ -239,7 +240,8 @@ long tavares_colouring_bound(struct UnweightedVtxList *P) {
 }
 
 // Returns an upper bound on weight from the vertices in P
-long colouring_bound(struct UnweightedVtxList *P, int (*next_vtx_fun)(unsigned long long *, int))
+long colouring_bound(struct UnweightedVtxList *P,
+        int (*next_vtx_fun)(unsigned long long *, int))
 {
     unsigned long long to_colour[WORDS_PER_BITSET];
     unsigned long long candidates[WORDS_PER_BITSET];
@@ -287,7 +289,8 @@ long vertex_weight_sum(struct UnweightedVtxList *P)
 }
 
 void expand(struct VtxList *C, struct UnweightedVtxList *P,
-        struct VtxList *incumbent, int level)
+        struct VtxList *incumbent, int level,
+        int (*next_vtx_fun)(unsigned long long *, int))
 {
     stats.expand_calls += 1;
     if (P->size==0 && C->total_wt>incumbent->total_wt)
@@ -300,20 +303,17 @@ void expand(struct VtxList *C, struct UnweightedVtxList *P,
         if (bound <= incumbent->total_wt) return;
         break;
     case 1:
-        bound = C->total_wt + colouring_bound(
-                P, arguments.colouring_order ? first_set_bit : last_set_bit);
-        if (bound <= incumbent->total_wt)
+        if (C->total_wt + colouring_bound(P, next_vtx_fun) <= incumbent->total_wt)
             return;
         break;
     case 2:
-        if (C->total_wt + tavares_colouring_bound(P) <= incumbent->total_wt)
+        if (C->total_wt + tavares_colouring_bound(P, next_vtx_fun) <= incumbent->total_wt)
             return;
         break;
     case 3:
-        if (C->total_wt + colouring_bound(
-                    P, arguments.colouring_order ? first_set_bit : last_set_bit) <= incumbent->total_wt)
+        if (C->total_wt + colouring_bound(P, next_vtx_fun) <= incumbent->total_wt)
             return;
-        if (C->total_wt + tavares_colouring_bound(P) <= incumbent->total_wt)
+        if (C->total_wt + tavares_colouring_bound(P, next_vtx_fun) <= incumbent->total_wt)
             return;
         break;
     }
@@ -333,7 +333,7 @@ void expand(struct VtxList *C, struct UnweightedVtxList *P,
         }
 
         push_vtx(C, v);
-        expand(C, new_P, incumbent, level+1);
+        expand(C, new_P, incumbent, level+1, next_vtx_fun);
         pop_vtx(C);
         if (arguments.colouring_type==0) {
             bound -= weight[v];
@@ -463,7 +463,7 @@ struct VtxList mc(struct Graph* g) {
         for (int j=0; j<i; j++)
             if (adjacent[i][j])
                 P.vv[P.size++] = j;
-        expand(&C, &P, &incumbent, 0);
+        expand(&C, &P, &incumbent, 0, arguments.colouring_order ? first_set_bit : last_set_bit);
         c[i] = incumbent.total_wt;
         if (!arguments.quiet)
             printf("c[%d]=%ld; Incumbent size: %d\n", i, c[i], incumbent.size);

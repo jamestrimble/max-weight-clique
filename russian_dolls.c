@@ -310,9 +310,11 @@ void expand(struct VtxList *C, struct UnweightedVtxList *P,
     if (P->size==0 && C->total_wt>incumbent->total_wt)
         *incumbent = *C;
 
+    long bound = 0;
     switch (arguments.colouring_type) {
     case 0:
-        if (C->total_wt + vertex_weight_sum(P) <= incumbent->total_wt) return;
+        bound = C->total_wt + vertex_weight_sum(P);
+        if (bound <= incumbent->total_wt) return;
         break;
     case 1:
         for (int i=0; i < (arguments.colouring_strategy==2 ? num_permuted_graphs : 1); i++)
@@ -351,6 +353,11 @@ void expand(struct VtxList *C, struct UnweightedVtxList *P,
         push_vtx(C, v);
         expand(C, new_P, incumbent, level+1, permuted_graphs);
         pop_vtx(C);
+        if (arguments.colouring_type==0) {
+            bound -= weight[v];
+            if (bound <= incumbent->total_wt)
+                return;
+        }
     }
 }
 

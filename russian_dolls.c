@@ -14,9 +14,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-const int num_permuted_graphs = 8;
-
-
 #define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
 
 static void fail(char* msg) {
@@ -37,8 +34,6 @@ static struct argp_option options[] = {
             "0=one vertex per colour, 1=one colour per vertex, 2=Tavares-style, 3=1 then 2"},
     {"colouring-order", 'k', "ORDER", 0,
             "0=reverse, 1=forwards"},
-    {"colouring-strategy", 'c', "STRATEGY", 0,
-            "0=reverse, 1=forwards, 2=try lots of orders"},
     {"verbose-level", 'v', "LEVEL", 0,
             "Report progress up to level LEVEL of search tree"},
     {"vtx-ordering", 'o', "ORDER", 0,
@@ -54,7 +49,6 @@ static struct {
     bool quiet;
     int colouring_type;
     int colouring_order;
-    int colouring_strategy;
     int verbose_level;
     int vtx_ordering;
     char *filename;
@@ -65,7 +59,6 @@ void set_default_arguments() {
     arguments.quiet = false;
     arguments.colouring_type = 0;
     arguments.colouring_order = 0;
-    arguments.colouring_strategy = 0;
     arguments.verbose_level = 0;
     arguments.vtx_ordering = 0;
     arguments.filename = NULL;
@@ -86,11 +79,6 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state) {
             arguments.colouring_order = atoi(arg);
             if (arguments.colouring_order<0 || arguments.colouring_order>1)
                 fail("Invalid colouring order");
-            break;
-        case 'c':
-            arguments.colouring_strategy = atoi(arg);
-            if (arguments.colouring_strategy<0 || arguments.colouring_strategy>2)
-                fail("Invalid colouring strategy");
             break;
         case 'v':
             arguments.verbose_level = atoi(arg);
@@ -180,12 +168,7 @@ bool check_clique(struct Graph* g, struct VtxList* clq) {
 long weight[MAX_N]; 
 long c[MAX_N]; 
 bool adjacent[MAX_N][MAX_N];
-
-struct PermutedGraph {
-    int permutation[MAX_N];
-    long wt[MAX_N];
-    unsigned long long bitadj[MAX_N][WORDS_PER_BITSET];
-};
+unsigned long long bitadj[MAX_N][WORDS_PER_BITSET];
 
 void push_vtx(struct VtxList *L, int v) {
     L->vv[L->size++] = v;
@@ -202,36 +185,29 @@ struct {
 } prealloc;
 
 // Returns an upper bound on weight from the vertices in P
-long tavares_colouring_bound(struct UnweightedVtxList *P, struct PermutedGraph *pg) {
+long tavares_colouring_bound(struct UnweightedVtxList *P) {
     unsigned long long to_colour[WORDS_PER_BITSET];
     unsigned long long candidates[WORDS_PER_BITSET];
 
-    int max_v = 0;
-    for (int i=0; i<P->size; i++) {
-        int v = pg->permutation[P->vv[i]];
-//        int v = P->vv[i];
-        if (v > max_v) max_v = v;
-    }
+    if (P->size==0) return 0;
 
+    int max_v = P->vv[P->size-1];
     int numwords = max_v/BITS_PER_WORD+1;
 
     for (int i=0; i<numwords; i++)
         to_colour[i] = 0ull;
 
     for (int i=0; i<P->size; i++)
-        set_bit(to_colour, pg->permutation[P->vv[i]]);
-//        set_bit(to_colour, P->vv[i]);
+        set_bit(to_colour, P->vv[i]);
 
     int v;
     long total_wt = 0;
 
     long residual_wt[MAX_N];
     for (int i=0; i<P->size; i++) {
-        int v = pg->permutation[P->vv[i]];
-        residual_wt[v] = pg->wt[v];
+        int v = P->vv[i];
+        residual_wt[v] = weight[v];
     }
-//        residual_wt[P->vv[i]] = weight[P->vv[i]];
-
 
     while ((v=last_set_bit(to_colour, numwords))!=-1) {
         numwords = v/BITS_PER_WORD+1;
@@ -242,7 +218,7 @@ long tavares_colouring_bound(struct UnweightedVtxList *P, struct PermutedGraph *
         int col_class_size = 1;
         col_class[0] = v;
         // The next line also removes v from the bitset
-        reject_adjacent_vertices(candidates, pg->bitadj[v], numwords);
+        reject_adjacent_vertices(candidates, bitadj[v], numwords);
         while ((v=last_set_bit(candidates, v/BITS_PER_WORD+1))!=-1) {
             if (residual_wt[v] < class_min_wt) {
                 class_min_wt = residual_wt[v];
@@ -250,7 +226,7 @@ long tavares_colouring_bound(struct UnweightedVtxList *P, struct PermutedGraph *
             unset_bit(to_colour, v);
             col_class[col_class_size++] = v;
             // The next line also removes v from the bitset
-            reject_adjacent_vertices(candidates, pg->bitadj[v], v/BITS_PER_WORD+1);
+            reject_adjacent_vertices(candidates, bitadj[v], v/BITS_PER_WORD+1);
         }
         for (int i=0; i<col_class_size; i++) {
             int w = col_class[i];
@@ -263,44 +239,40 @@ long tavares_colouring_bound(struct UnweightedVtxList *P, struct PermutedGraph *
 }
 
 // Returns an upper bound on weight from the vertices in P
-long colouring_bound(struct UnweightedVtxList *P, struct PermutedGraph *pg,
-        int (*next_vtx_fun)(unsigned long long *, int))
+long colouring_bound(struct UnweightedVtxList *P, int (*next_vtx_fun)(unsigned long long *, int))
 {
     unsigned long long to_colour[WORDS_PER_BITSET];
     unsigned long long candidates[WORDS_PER_BITSET];
 
-    int max_v = 0;
-    for (int i=0; i<P->size; i++) {
-        int v = pg->permutation[P->vv[i]];
-        if (v > max_v) max_v = v;
-    }
+    if (P->size==0) return 0;
 
+    int max_v = P->vv[P->size-1];
     int numwords = max_v/BITS_PER_WORD+1;
 
     for (int i=0; i<numwords; i++)
         to_colour[i] = 0ull;
 
     for (int i=0; i<P->size; i++)
-        set_bit(to_colour, pg->permutation[P->vv[i]]);
+        set_bit(to_colour, P->vv[i]);
 
     int v;
     long total_wt = 0;
 
     while ((v=next_vtx_fun(to_colour, numwords))!=-1) {
         copy_bitset(to_colour, candidates, numwords);
-        long class_max_wt = pg->wt[v];
-        total_wt += pg->wt[v];
+        long class_max_wt = weight[v];
+        total_wt += weight[v];
         unset_bit(to_colour, v);
         // The next line also removes v from the bitset
-        reject_adjacent_vertices(candidates, pg->bitadj[v], numwords);
+        reject_adjacent_vertices(candidates, bitadj[v], numwords);
         while ((v=next_vtx_fun(candidates, numwords))!=-1) {
-            if (pg->wt[v] > class_max_wt) {
-                total_wt = total_wt - class_max_wt + pg->wt[v];
-                class_max_wt = pg->wt[v];
+            if (weight[v] > class_max_wt) {
+                total_wt = total_wt - class_max_wt + weight[v];
+                class_max_wt = weight[v];
             }
             unset_bit(to_colour, v);
             // The next line also removes v from the bitset
-            reject_adjacent_vertices(candidates, pg->bitadj[v], numwords);
+            reject_adjacent_vertices(candidates, bitadj[v], numwords);
         }
     }
     return total_wt;
@@ -315,7 +287,7 @@ long vertex_weight_sum(struct UnweightedVtxList *P)
 }
 
 void expand(struct VtxList *C, struct UnweightedVtxList *P,
-        struct VtxList *incumbent, int level, struct PermutedGraph *permuted_graphs)
+        struct VtxList *incumbent, int level)
 {
     stats.expand_calls += 1;
     if (P->size==0 && C->total_wt>incumbent->total_wt)
@@ -328,27 +300,21 @@ void expand(struct VtxList *C, struct UnweightedVtxList *P,
         if (bound <= incumbent->total_wt) return;
         break;
     case 1:
-        for (int i=0; i < (arguments.colouring_strategy==2 ? num_permuted_graphs : 1); i++) {
-            bound = C->total_wt + colouring_bound(
-                    P, &permuted_graphs[i], arguments.colouring_order ? first_set_bit : last_set_bit);
-            if (bound <= incumbent->total_wt)
-                return;
-        }
+        bound = C->total_wt + colouring_bound(
+                P, arguments.colouring_order ? first_set_bit : last_set_bit);
+        if (bound <= incumbent->total_wt)
+            return;
         break;
     case 2:
-        for (int i=0; i < (arguments.colouring_strategy==2 ? num_permuted_graphs : 1); i++)
-            if (C->total_wt + tavares_colouring_bound(P, &permuted_graphs[i]) <= incumbent->total_wt)
-                return;
+        if (C->total_wt + tavares_colouring_bound(P) <= incumbent->total_wt)
+            return;
         break;
     case 3:
-        for (int i=0; i < (arguments.colouring_strategy==2 ? num_permuted_graphs : 1); i++)
-            if (C->total_wt + colouring_bound(
-                        P, &permuted_graphs[i], arguments.colouring_order ? first_set_bit : last_set_bit)
-                        <= incumbent->total_wt)
-                return;
-        for (int i=0; i < (arguments.colouring_strategy==2 ? num_permuted_graphs : 1); i++)
-            if (C->total_wt + tavares_colouring_bound(P, &permuted_graphs[i]) <= incumbent->total_wt)
-                return;
+        if (C->total_wt + colouring_bound(
+                    P, arguments.colouring_order ? first_set_bit : last_set_bit) <= incumbent->total_wt)
+            return;
+        if (C->total_wt + tavares_colouring_bound(P) <= incumbent->total_wt)
+            return;
         break;
     }
     
@@ -367,7 +333,7 @@ void expand(struct VtxList *C, struct UnweightedVtxList *P,
         }
 
         push_vtx(C, v);
-        expand(C, new_P, incumbent, level+1, permuted_graphs);
+        expand(C, new_P, incumbent, level+1);
         pop_vtx(C);
         if (arguments.colouring_type==0) {
             bound -= weight[v];
@@ -472,60 +438,21 @@ void order_vertices(int *vv, struct Graph *g, int vtx_ordering) {
     }
 }
 
-void permute_graph(struct PermutedGraph *pg, int *vtx_order, struct Graph *g, int vtx_ordering) {
-    int vv[MAX_N];
-    order_vertices(vv, g, vtx_ordering);
-
-    int vv_inv[MAX_N];
-    for (int i=0; i<g->n; i++)
-        vv_inv[vv[i]] = i;
-
-    memset(pg, 0, sizeof(*pg));
-
-    for (int i=0; i<g->n; i++) {
-        int v = vtx_order[i];
-        pg->permutation[i] = vv_inv[v];
-        pg->wt[vv_inv[v]] = g->weight[v];
-        for (int j=0; j<g->n; j++) {
-            int w = vtx_order[j];
-            bool is_adjacent = g->adjmat[v][w];
-            if (i==j || is_adjacent)
-                set_bit(pg->bitadj[vv_inv[v]], vv_inv[w]);
-        }
-    }
-}
-        
-
 struct VtxList mc(struct Graph* g) {
     int vv[MAX_N];
     order_vertices(vv, g, arguments.vtx_ordering);
 
+    memset(bitadj, 0, sizeof(bitadj));
     for (int i=0; i<g->n; i++) {
         for (int j=0; j<g->n; j++) {
             adjacent[i][j] = g->adjmat[vv[i]][vv[j]];
+            if (i==j || adjacent[i][j])
+                set_bit(bitadj[i], j);
         }
     }
 
     for (int i=0; i<g->n; i++)
         weight[i] = g->weight[vv[i]];
-
-    struct PermutedGraph *permuted_graphs = malloc(num_permuted_graphs * sizeof(struct PermutedGraph));
-    if (arguments.colouring_strategy == 0) {
-        permute_graph(&permuted_graphs[0], vv, g, arguments.vtx_ordering);
-    } else if (arguments.colouring_strategy == 1) {
-        permute_graph(&permuted_graphs[0], vv, g, -arguments.vtx_ordering);
-    } else {
-        permute_graph(&permuted_graphs[0], vv, g, 1);
-        permute_graph(&permuted_graphs[1], vv, g, -1);
-        permute_graph(&permuted_graphs[2], vv, g, 2);
-        permute_graph(&permuted_graphs[3], vv, g, -2);
-        permute_graph(&permuted_graphs[4], vv, g, 3);
-        permute_graph(&permuted_graphs[5], vv, g, -3);
-        permute_graph(&permuted_graphs[6], vv, g, 9);
-        permute_graph(&permuted_graphs[7], vv, g, -9);
-        for (int i=8; i<num_permuted_graphs; i++)
-            permute_graph(&permuted_graphs[i], vv, g, 10);
-    }
 
     struct VtxList incumbent = {.size=0, .total_wt=0};
 
@@ -536,7 +463,7 @@ struct VtxList mc(struct Graph* g) {
         for (int j=0; j<i; j++)
             if (adjacent[i][j])
                 P.vv[P.size++] = j;
-        expand(&C, &P, &incumbent, 0, permuted_graphs);
+        expand(&C, &P, &incumbent, 0);
         c[i] = incumbent.total_wt;
         if (!arguments.quiet)
             printf("c[%d]=%ld; Incumbent size: %d\n", i, c[i], incumbent.size);
@@ -545,8 +472,6 @@ struct VtxList mc(struct Graph* g) {
     // Use vertex indices from original graph
     for (int i=0; i<incumbent.size; i++)
         incumbent.vv[i] = vv[incumbent.vv[i]];
-
-    free(permuted_graphs);
 
     return incumbent;
 }

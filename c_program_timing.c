@@ -8,6 +8,8 @@ struct timespec start_time;
 
 long time_limit_sec;
 
+bool timed_out = false;
+
 // Based on https://gist.github.com/diabloneo/9619917
 struct timespec timespec_diff(struct timespec start,
                               struct timespec stop)
@@ -32,9 +34,14 @@ void set_time_limit_sec(long time_limit)
     time_limit_sec = time_limit;
 }
 
-bool time_limit_exceeded()
+void check_for_timeout()
 {
-    return time_limit_sec && get_elapsed_timespec().tv_sec >= time_limit_sec;
+    timed_out = time_limit_sec && get_elapsed_timespec().tv_sec >= time_limit_sec;
+}
+
+bool is_timeout_flag_set()
+{
+    return timed_out;
 }
 
 void set_start_time()
@@ -53,3 +60,4 @@ long get_elapsed_time_msec()
 {
     return timespec_to_msec(get_elapsed_timespec());
 }
+

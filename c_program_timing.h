@@ -8,4 +8,6 @@ long get_elapsed_time_msec();
 
 void set_time_limit_sec(long time_limit);
 
-bool time_limit_exceeded();
+void check_for_timeout();
+
+bool is_timeout_flag_set();

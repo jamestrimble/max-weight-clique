@@ -33,8 +33,8 @@ static char args_doc[] = "FILENAME";
 static struct argp_option options[] = {
     {"quiet", 'q', 0, 0,
             "Quiet output"},
-    {"tavares-colour", 't', 0, 0,
-            "Tavares-style colouring"},
+    {"colouring-type", 't', "TYPE", 0,
+            "0=one vertex per colour, 1=one colour per vertex, 2=Tavares-style, 3=1 then 2"},
     {"colouring-strategy", 'c', "STRATEGY", 0,
             "0=reverse, 1=forwards, 2=try lots of orders"},
     {"verbose-level", 'v', "LEVEL", 0,
@@ -50,7 +50,7 @@ static struct argp_option options[] = {
 
 static struct {
     bool quiet;
-    bool tavares_colour;
+    int colouring_type;
     int colouring_strategy;
     int verbose_level;
     int vtx_ordering;
@@ -60,7 +60,7 @@ static struct {
 
 static error_t parse_opt (int key, char *arg, struct argp_state *state) {
     arguments.quiet = false;
-    arguments.tavares_colour = false;
+    arguments.colouring_type = 0;
     arguments.verbose_level = 0;
     arguments.vtx_ordering = 0;
     arguments.filename = NULL;
@@ -70,7 +70,9 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state) {
             arguments.quiet = true;
             break;
         case 't':
-            arguments.tavares_colour = true;
+            arguments.colouring_type = atoi(arg);
+            if (arguments.colouring_type<0 || arguments.colouring_type>2)
+                fail("Invalid colouring type");
             break;
         case 'c':
             arguments.colouring_strategy = atoi(arg);
@@ -322,6 +324,14 @@ long colouring_bound(struct UnweightedVtxList *P, struct PermutedGraph *pg) {
     return total_wt;
 }
 
+long vertex_weight_sum(struct UnweightedVtxList *P)
+{
+    long bound = 0;
+    for (int i=0; i<P->size; i++)
+        bound += weight[P->vv[i]];
+    return bound;
+}
+
 void expand(struct VtxList *C, struct UnweightedVtxList *P,
         struct VtxList *incumbent, int level, struct PermutedGraph *permuted_graphs)
 {
@@ -329,22 +339,30 @@ void expand(struct VtxList *C, struct UnweightedVtxList *P,
     if (P->size==0 && C->total_wt>incumbent->total_wt)
         *incumbent = *C;
 
-    if (!arguments.tavares_colour || arguments.colouring_strategy != 2) {
-        // Even if we're using a Tavares-style bound, try the simple colouring bound first;
-        // (if we're not using colouring strategy 2)
-        // it's faster, and if we're lucky it will prune
-        for (int i=0; i < (arguments.colouring_strategy==2 ? num_permuted_graphs : 1); i++) {
-            if (C->total_wt + colouring_bound(P, &permuted_graphs[i]) <= incumbent->total_wt) return;
-        }
+    switch (arguments.colouring_type) {
+    case 0:
+        if (C->total_wt + vertex_weight_sum(P) <= incumbent->total_wt) return;
+        break;
+    case 1:
+        for (int i=0; i < (arguments.colouring_strategy==2 ? num_permuted_graphs : 1); i++)
+            if (C->total_wt + colouring_bound(P, &permuted_graphs[i]) <= incumbent->total_wt)
+                return;
+        break;
+    case 2:
+        for (int i=0; i < (arguments.colouring_strategy==2 ? num_permuted_graphs : 1); i++)
+            if (C->total_wt + tavares_colouring_bound(P, &permuted_graphs[i]) <= incumbent->total_wt)
+                return;
+        break;
+    case 3:
+        for (int i=0; i < (arguments.colouring_strategy==2 ? num_permuted_graphs : 1); i++)
+            if (C->total_wt + colouring_bound(P, &permuted_graphs[i]) <= incumbent->total_wt)
+                return;
+        for (int i=0; i < (arguments.colouring_strategy==2 ? num_permuted_graphs : 1); i++)
+            if (C->total_wt + tavares_colouring_bound(P, &permuted_graphs[i]) <= incumbent->total_wt)
+                return;
+        break;
     }
-
-    if (arguments.tavares_colour) {
-        for (int i=0; i < (arguments.colouring_strategy==2 ? num_permuted_graphs : 1); i++) {
-            long bound = C->total_wt + tavares_colouring_bound(P, &permuted_graphs[i]);
-            if (bound <= incumbent->total_wt) return;
-        }
-    }
-
+    
     struct UnweightedVtxList *new_P = &prealloc.P[level];
 
     for (int i=P->size-1; i>=0; i--) {

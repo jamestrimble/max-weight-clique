@@ -16,6 +16,15 @@ static int last_set_bit(unsigned long long bitset[WORDS_PER_BITSET], int num_wor
     return -1;
 }
 
+int first_set_bit(unsigned long long bitset[WORDS_PER_BITSET],
+                         int num_words)
+{
+    for (int i=0; i<num_words; i++)
+        if (bitset[i] != 0)
+            return i*BITS_PER_WORD + __builtin_ctzll(bitset[i]);
+    return -1;
+}
+
 static void reject_adjacent_vertices(unsigned long long bitset[WORDS_PER_BITSET],
                                      unsigned long long adj[WORDS_PER_BITSET],
                                      int num_words)

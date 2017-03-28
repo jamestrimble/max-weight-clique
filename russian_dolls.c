@@ -35,6 +35,8 @@ static struct argp_option options[] = {
             "Quiet output"},
     {"colouring-type", 't', "TYPE", 0,
             "0=one vertex per colour, 1=one colour per vertex, 2=Tavares-style, 3=1 then 2"},
+    {"colouring-order", 'k', "ORDER", 0,
+            "0=reverse, 1=forwards"},
     {"colouring-strategy", 'c', "STRATEGY", 0,
             "0=reverse, 1=forwards, 2=try lots of orders"},
     {"verbose-level", 'v', "LEVEL", 0,
@@ -51,6 +53,7 @@ static struct argp_option options[] = {
 static struct {
     bool quiet;
     int colouring_type;
+    int colouring_order;
     int colouring_strategy;
     int verbose_level;
     int vtx_ordering;
@@ -61,6 +64,8 @@ static struct {
 void set_default_arguments() {
     arguments.quiet = false;
     arguments.colouring_type = 0;
+    arguments.colouring_order = 0;
+    arguments.colouring_strategy = 0;
     arguments.verbose_level = 0;
     arguments.vtx_ordering = 0;
     arguments.filename = NULL;
@@ -76,6 +81,11 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state) {
             arguments.colouring_type = atoi(arg);
             if (arguments.colouring_type<0 || arguments.colouring_type>3)
                 fail("Invalid colouring type");
+            break;
+        case 'k':
+            arguments.colouring_order = atoi(arg);
+            if (arguments.colouring_order<0 || arguments.colouring_order>1)
+                fail("Invalid colouring order");
             break;
         case 'c':
             arguments.colouring_strategy = atoi(arg);
@@ -253,7 +263,9 @@ long tavares_colouring_bound(struct UnweightedVtxList *P, struct PermutedGraph *
 }
 
 // Returns an upper bound on weight from the vertices in P
-long colouring_bound(struct UnweightedVtxList *P, struct PermutedGraph *pg) {
+long colouring_bound(struct UnweightedVtxList *P, struct PermutedGraph *pg,
+        int (*next_vtx_fun)(unsigned long long *, int))
+{
     unsigned long long to_colour[WORDS_PER_BITSET];
     unsigned long long candidates[WORDS_PER_BITSET];
 
@@ -274,22 +286,21 @@ long colouring_bound(struct UnweightedVtxList *P, struct PermutedGraph *pg) {
     int v;
     long total_wt = 0;
 
-    while ((v=last_set_bit(to_colour, numwords))!=-1) {
-        numwords = v/BITS_PER_WORD+1;
+    while ((v=next_vtx_fun(to_colour, numwords))!=-1) {
         copy_bitset(to_colour, candidates, numwords);
         long class_max_wt = pg->wt[v];
         total_wt += pg->wt[v];
         unset_bit(to_colour, v);
         // The next line also removes v from the bitset
         reject_adjacent_vertices(candidates, pg->bitadj[v], numwords);
-        while ((v=last_set_bit(candidates, v/BITS_PER_WORD+1))!=-1) {
+        while ((v=next_vtx_fun(candidates, numwords))!=-1) {
             if (pg->wt[v] > class_max_wt) {
                 total_wt = total_wt - class_max_wt + pg->wt[v];
                 class_max_wt = pg->wt[v];
             }
             unset_bit(to_colour, v);
             // The next line also removes v from the bitset
-            reject_adjacent_vertices(candidates, pg->bitadj[v], v/BITS_PER_WORD+1);
+            reject_adjacent_vertices(candidates, pg->bitadj[v], numwords);
         }
     }
     return total_wt;
@@ -317,9 +328,12 @@ void expand(struct VtxList *C, struct UnweightedVtxList *P,
         if (bound <= incumbent->total_wt) return;
         break;
     case 1:
-        for (int i=0; i < (arguments.colouring_strategy==2 ? num_permuted_graphs : 1); i++)
-            if (C->total_wt + colouring_bound(P, &permuted_graphs[i]) <= incumbent->total_wt)
+        for (int i=0; i < (arguments.colouring_strategy==2 ? num_permuted_graphs : 1); i++) {
+            bound = C->total_wt + colouring_bound(
+                    P, &permuted_graphs[i], arguments.colouring_order ? first_set_bit : last_set_bit);
+            if (bound <= incumbent->total_wt)
                 return;
+        }
         break;
     case 2:
         for (int i=0; i < (arguments.colouring_strategy==2 ? num_permuted_graphs : 1); i++)
@@ -328,7 +342,9 @@ void expand(struct VtxList *C, struct UnweightedVtxList *P,
         break;
     case 3:
         for (int i=0; i < (arguments.colouring_strategy==2 ? num_permuted_graphs : 1); i++)
-            if (C->total_wt + colouring_bound(P, &permuted_graphs[i]) <= incumbent->total_wt)
+            if (C->total_wt + colouring_bound(
+                        P, &permuted_graphs[i], arguments.colouring_order ? first_set_bit : last_set_bit)
+                        <= incumbent->total_wt)
                 return;
         for (int i=0; i < (arguments.colouring_strategy==2 ? num_permuted_graphs : 1); i++)
             if (C->total_wt + tavares_colouring_bound(P, &permuted_graphs[i]) <= incumbent->total_wt)

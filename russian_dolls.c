@@ -303,18 +303,14 @@ void expand(struct VtxList *C, struct UnweightedVtxList *P,
         if (bound <= incumbent->total_wt) return;
         break;
     case 1:
-        if (C->total_wt + colouring_bound(P, next_vtx_fun) <= incumbent->total_wt)
-            return;
+        if (C->total_wt + colouring_bound(P, next_vtx_fun) <= incumbent->total_wt) return;
         break;
     case 2:
-        if (C->total_wt + tavares_colouring_bound(P, next_vtx_fun) <= incumbent->total_wt)
-            return;
+        if (C->total_wt + tavares_colouring_bound(P, next_vtx_fun) <= incumbent->total_wt) return;
         break;
     case 3:
-        if (C->total_wt + colouring_bound(P, next_vtx_fun) <= incumbent->total_wt)
-            return;
-        if (C->total_wt + tavares_colouring_bound(P, next_vtx_fun) <= incumbent->total_wt)
-            return;
+        if (C->total_wt + colouring_bound(P, next_vtx_fun) <= incumbent->total_wt) return;
+        if (C->total_wt + tavares_colouring_bound(P, next_vtx_fun) <= incumbent->total_wt) return;
         break;
     }
     

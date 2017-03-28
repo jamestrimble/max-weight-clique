@@ -34,8 +34,6 @@ static struct argp_option options[] = {
             "0=one vertex per colour, 1=one colour per vertex, 2=Tavares-style, 3=1 then 2"},
     {"colouring-order", 'k', "ORDER", 0,
             "0=reverse, 1=forwards"},
-    {"verbose-level", 'v', "LEVEL", 0,
-            "Report progress up to level LEVEL of search tree"},
     {"vtx-ordering", 'o', "ORDER", 0,
             "Set vertex ordering heuristic (0=no sorting, 1=increasing deg, "
             "-1=decreasing deg, 2=increasing weight, -2=decreasing weight, "
@@ -49,7 +47,6 @@ static struct {
     bool quiet;
     int colouring_type;
     int colouring_order;
-    int verbose_level;
     int vtx_ordering;
     char *filename;
     int arg_num;
@@ -59,7 +56,6 @@ void set_default_arguments() {
     arguments.quiet = false;
     arguments.colouring_type = 0;
     arguments.colouring_order = 0;
-    arguments.verbose_level = 0;
     arguments.vtx_ordering = 0;
     arguments.filename = NULL;
     arguments.arg_num = 0;
@@ -79,9 +75,6 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state) {
             arguments.colouring_order = atoi(arg);
             if (arguments.colouring_order<0 || arguments.colouring_order>1)
                 fail("Invalid colouring order");
-            break;
-        case 'v':
-            arguments.verbose_level = atoi(arg);
             break;
         case 'o':
             arguments.vtx_ordering = atoi(arg);

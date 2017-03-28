@@ -33,8 +33,6 @@ static struct argp_option options[] = {
             "Quiet output"},
     {"tavares-colour", 't', 0, 0,
             "Tavares-style colouring"},
-    {"verbose-level", 'v', "LEVEL", 0,
-            "Report progress up to level LEVEL of search tree"},
     {"vtx-ordering", 'o', "ORDER", 0,
             "Set vertex ordering heuristic (0=no sorting, 1=increasing deg, "
             "-1=decreasing deg, 2=increasing weight, -2=decreasing weight, "
@@ -45,7 +43,6 @@ static struct argp_option options[] = {
 static struct {
     bool quiet;
     bool tavares_colour;
-    int verbose_level;
     int vtx_ordering;
     char *filename;
     int arg_num;
@@ -54,7 +51,6 @@ static struct {
 void set_default_arguments() {
     arguments.quiet = false;
     arguments.tavares_colour = false;
-    arguments.verbose_level = 0;
     arguments.vtx_ordering = 0;
     arguments.filename = NULL;
     arguments.arg_num = 0;
@@ -67,9 +63,6 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state) {
             break;
         case 't':
             arguments.tavares_colour = true;
-            break;
-        case 'v':
-            arguments.verbose_level = atoi(arg);
             break;
         case 'o':
             arguments.vtx_ordering = atoi(arg);

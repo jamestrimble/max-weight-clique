@@ -13,7 +13,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-typedef unsigned long long ULL;
 
 #define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
 
@@ -122,15 +121,15 @@ struct UnweightedVtxList {
                                 Bitset functions
 *******************************************************************************/
 
-static void set_bit(ULL bitset[WORDS_PER_BITSET], int bit) {
+static void set_bit(unsigned long long bitset[WORDS_PER_BITSET], int bit) {
     bitset[bit/BITS_PER_WORD] |= (1ull << (bit%BITS_PER_WORD));
 }
 
-static void unset_bit(ULL bitset[WORDS_PER_BITSET], int bit) {
+static void unset_bit(unsigned long long bitset[WORDS_PER_BITSET], int bit) {
     bitset[bit/BITS_PER_WORD] &= ~(1ull << (bit%BITS_PER_WORD));
 }
 
-static int last_set_bit(ULL bitset[WORDS_PER_BITSET], int num_words) {
+static int last_set_bit(unsigned long long bitset[WORDS_PER_BITSET], int num_words) {
     for (int i=num_words-1; i>=0; i--) {
         if (bitset[i] != 0)
             return i*BITS_PER_WORD + (BITS_PER_WORD-1-__builtin_clzll(bitset[i]));
@@ -138,14 +137,14 @@ static int last_set_bit(ULL bitset[WORDS_PER_BITSET], int num_words) {
     return -1;
 }
 
-static void reject_adjacent_vertices(ULL bitset[WORDS_PER_BITSET], ULL adj[WORDS_PER_BITSET],
+static void reject_adjacent_vertices(unsigned long long bitset[WORDS_PER_BITSET], unsigned long long adj[WORDS_PER_BITSET],
         int num_words) {
     for (int i=0; i<num_words; i++) {
         bitset[i] &= ~adj[i];
     }
 }
 
-static void copy_bitset(ULL src[WORDS_PER_BITSET], ULL dest[WORDS_PER_BITSET],
+static void copy_bitset(unsigned long long src[WORDS_PER_BITSET], unsigned long long dest[WORDS_PER_BITSET],
         int num_words) {
     for (int i=0; i<num_words; i++)
         dest[i] = src[i];
@@ -187,7 +186,7 @@ bool check_clique(struct Graph* g, struct VtxList* clq) {
 
 long weight[MAX_N]; 
 bool adjacent[MAX_N][MAX_N];
-ULL bitadj[MAX_N][WORDS_PER_BITSET];
+unsigned long long bitadj[MAX_N][WORDS_PER_BITSET];
 
 void push_vtx(struct VtxList *L, int v) {
     L->vv[L->size++] = v;
@@ -204,8 +203,8 @@ struct {
 } prealloc;
 
 void tavares_colouring_bound(struct UnweightedVtxList *P, long *cumulative_wt_bound) {
-    ULL to_colour[WORDS_PER_BITSET];
-    ULL candidates[WORDS_PER_BITSET];
+    unsigned long long to_colour[WORDS_PER_BITSET];
+    unsigned long long candidates[WORDS_PER_BITSET];
 
     int max_v = 0;
     for (int i=0; i<P->size; i++)
@@ -271,8 +270,8 @@ struct ColourClass {
 #define NUM_COLOUR_CLASS_LISTS 10
 
 void sorted_colouring_bound(struct UnweightedVtxList *P, long *cumulative_wt_bound) {
-    ULL to_colour[WORDS_PER_BITSET];
-    ULL candidates[WORDS_PER_BITSET];
+    unsigned long long to_colour[WORDS_PER_BITSET];
+    unsigned long long candidates[WORDS_PER_BITSET];
     int colour_class_buf[MAX_N];   // Lists of vertices in colour classes will be stored here
     int colour_class_buf_len = 0;
     struct ColourClass colour_classes[NUM_COLOUR_CLASS_LISTS][MAX_N];
@@ -337,8 +336,8 @@ void sorted_colouring_bound(struct UnweightedVtxList *P, long *cumulative_wt_bou
 }
 
 void colouring_bound(struct UnweightedVtxList *P, long *cumulative_wt_bound) {
-    ULL to_colour[WORDS_PER_BITSET];
-    ULL candidates[WORDS_PER_BITSET];
+    unsigned long long to_colour[WORDS_PER_BITSET];
+    unsigned long long candidates[WORDS_PER_BITSET];
 
     int max_v = 0;
     for (int i=0; i<P->size; i++)

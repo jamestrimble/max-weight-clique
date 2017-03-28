@@ -15,7 +15,6 @@
 
 const int num_permuted_graphs = 8;
 
-typedef unsigned long long ULL;
 
 #define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
 
@@ -136,15 +135,15 @@ struct UnweightedVtxList {
                                 Bitset functions
 *******************************************************************************/
 
-static void set_bit(ULL bitset[WORDS_PER_BITSET], int bit) {
+static void set_bit(unsigned long long bitset[WORDS_PER_BITSET], int bit) {
     bitset[bit/BITS_PER_WORD] |= (1ull << (bit%BITS_PER_WORD));
 }
 
-static void unset_bit(ULL bitset[WORDS_PER_BITSET], int bit) {
+static void unset_bit(unsigned long long bitset[WORDS_PER_BITSET], int bit) {
     bitset[bit/BITS_PER_WORD] &= ~(1ull << (bit%BITS_PER_WORD));
 }
 
-static int last_set_bit(ULL bitset[WORDS_PER_BITSET], int num_words) {
+static int last_set_bit(unsigned long long bitset[WORDS_PER_BITSET], int num_words) {
     for (int i=num_words-1; i>=0; i--) {
         if (bitset[i] != 0)
             return i*BITS_PER_WORD + (BITS_PER_WORD-1-__builtin_clzll(bitset[i]));
@@ -152,14 +151,14 @@ static int last_set_bit(ULL bitset[WORDS_PER_BITSET], int num_words) {
     return -1;
 }
 
-static void reject_adjacent_vertices(ULL bitset[WORDS_PER_BITSET], ULL adj[WORDS_PER_BITSET],
+static void reject_adjacent_vertices(unsigned long long bitset[WORDS_PER_BITSET], unsigned long long adj[WORDS_PER_BITSET],
         int num_words) {
     for (int i=0; i<num_words; i++) {
         bitset[i] &= ~adj[i];
     }
 }
 
-static void copy_bitset(ULL src[WORDS_PER_BITSET], ULL dest[WORDS_PER_BITSET],
+static void copy_bitset(unsigned long long src[WORDS_PER_BITSET], unsigned long long dest[WORDS_PER_BITSET],
         int num_words) {
     for (int i=0; i<num_words; i++)
         dest[i] = src[i];
@@ -206,7 +205,7 @@ bool adjacent[MAX_N][MAX_N];
 struct PermutedGraph {
     int permutation[MAX_N];
     long wt[MAX_N];
-    ULL bitadj[MAX_N][WORDS_PER_BITSET];
+    unsigned long long bitadj[MAX_N][WORDS_PER_BITSET];
 };
 
 void push_vtx(struct VtxList *L, int v) {
@@ -225,8 +224,8 @@ struct {
 
 // Returns an upper bound on weight from the vertices in P
 long tavares_colouring_bound(struct UnweightedVtxList *P, struct PermutedGraph *pg) {
-    ULL to_colour[WORDS_PER_BITSET];
-    ULL candidates[WORDS_PER_BITSET];
+    unsigned long long to_colour[WORDS_PER_BITSET];
+    unsigned long long candidates[WORDS_PER_BITSET];
 
     int max_v = 0;
     for (int i=0; i<P->size; i++) {
@@ -286,8 +285,8 @@ long tavares_colouring_bound(struct UnweightedVtxList *P, struct PermutedGraph *
 
 // Returns an upper bound on weight from the vertices in P
 long colouring_bound(struct UnweightedVtxList *P, struct PermutedGraph *pg) {
-    ULL to_colour[WORDS_PER_BITSET];
-    ULL candidates[WORDS_PER_BITSET];
+    unsigned long long to_colour[WORDS_PER_BITSET];
+    unsigned long long candidates[WORDS_PER_BITSET];
 
     int max_v = 0;
     for (int i=0; i<P->size; i++) {

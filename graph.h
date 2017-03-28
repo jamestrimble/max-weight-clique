@@ -3,9 +3,8 @@
 #include <limits.h>
 #include <stdbool.h>
 
-typedef unsigned long long ULL;
 
-#define BYTES_PER_WORD sizeof(ULL)
+#define BYTES_PER_WORD sizeof(unsigned long long)
 #define BITS_PER_WORD (CHAR_BIT * BYTES_PER_WORD)
 #define WORDS_PER_BITSET ((MAX_N+(BITS_PER_WORD-1))/BITS_PER_WORD)
 
@@ -16,7 +15,7 @@ struct Graph {
     long weighted_deg[MAX_N];
     long weight[MAX_N];
     bool adjmat[MAX_N][MAX_N];
-    ULL bitadjmat[MAX_N][WORDS_PER_BITSET];
+    unsigned long long bitadjmat[MAX_N][WORDS_PER_BITSET];
 };
 
 void add_edge(struct Graph *g, int v, int w);

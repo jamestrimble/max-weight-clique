@@ -51,16 +51,13 @@ static struct {
     int arg_num;
 } arguments;
 
-void set_default_arguments() {
+static error_t parse_opt (int key, char *arg, struct argp_state *state) {
     arguments.quiet = false;
     arguments.tavares_colour = false;
     arguments.verbose_level = 0;
     arguments.vtx_ordering = 0;
     arguments.filename = NULL;
     arguments.arg_num = 0;
-}
-
-static error_t parse_opt (int key, char *arg, struct argp_state *state) {
     switch (key) {
         case 'q':
             arguments.quiet = true;
@@ -489,7 +486,6 @@ struct VtxList mc(struct Graph* g) {
 }
 
 int main(int argc, char** argv) {
-    set_default_arguments();
     argp_parse(&argp, argc, argv, 0, 0, 0);
 
     initialise_stats();

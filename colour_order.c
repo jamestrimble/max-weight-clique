@@ -25,10 +25,8 @@
 static char doc[] = "Find a maximum clique in a graph in DIMACS format";
 static char args_doc[] = "FILENAME";
 static struct argp_option options[] = {
-    {"quiet", 'q', 0, 0,
-            "Quiet output"},
-    {"tavares-colour", 't', 0, 0,
-            "Tavares-style colouring"},
+    {"quiet", 'q', 0, 0, "Quiet output"},
+    {"tavares-colour", 't', 0, 0, "Tavares-style colouring"},
     {"vtx-ordering", 'o', "ORDER", 0, vertex_order_help},
     { 0 }
 };
@@ -172,7 +170,6 @@ void colouring_bound(struct UnweightedVtxList *P, long *cumulative_wt_bound) {
     for (int i=0; i<numwords; i++)
         to_colour[i] = 0ull;
 
-//    printf("*%d* ", P->size);
     for (int i=0; i<P->size; i++)
         set_bit(to_colour, P->vv[i]);
 
@@ -208,17 +205,17 @@ void colouring_bound(struct UnweightedVtxList *P, long *cumulative_wt_bound) {
 }
 
 void expand(struct VtxList *C, struct UnweightedVtxList *P, struct VtxList *incumbent, int level,
-        long *expand_call_count)
+        long *expand_call_count, bool quiet, bool tavares_colour)
 {
     (*expand_call_count)++;
-    if (P->size==0 && C->total_wt>incumbent->total_wt) {
+    if (!quiet && P->size==0 && C->total_wt>incumbent->total_wt) {
         *incumbent = *C;
         printf("New incumbent of weight %ld\n", incumbent->total_wt);
     }
 
     long cumulative_wt_bound[MAX_N];
 
-    if (arguments.tavares_colour)
+    if (tavares_colour)
         tavares_colouring_bound(P, cumulative_wt_bound);
     else
         colouring_bound(P, cumulative_wt_bound);
@@ -237,14 +234,18 @@ void expand(struct VtxList *C, struct UnweightedVtxList *P, struct VtxList *incu
         }
 
         push_vtx(C, v);
-        expand(C, new_P, incumbent, level+1, expand_call_count);
+        expand(C, new_P, incumbent, level+1, expand_call_count, quiet, tavares_colour);
         pop_vtx(C);
     }
 }
 
-struct VtxList mc(struct Graph* g, long *expand_call_count) {
+struct VtxList mc(struct Graph* g, long *expand_call_count,
+        bool quiet, bool tavares_colour, int vtx_ordering)
+{
+    calculate_all_degrees(g);
+
     int vv[MAX_N];
-    order_vertices(vv, g, arguments.vtx_ordering);
+    order_vertices(vv, g, vtx_ordering);
 
     memset(bitadj, 0, sizeof(bitadj));
     for (int i=0; i<g->n; i++) {
@@ -263,7 +264,7 @@ struct VtxList mc(struct Graph* g, long *expand_call_count) {
     struct UnweightedVtxList P = {.size=0};
     for (int v=0; v<g->n; v++) P.vv[P.size++] = v;
     struct VtxList C = {.size=0, .total_wt=0};
-    expand(&C, &P, &incumbent, 0, expand_call_count);
+    expand(&C, &P, &incumbent, 0, expand_call_count, quiet, tavares_colour);
 
     // Use vertex indices from original graph
     for (int i=0; i<incumbent.size; i++)
@@ -280,9 +281,9 @@ int main(int argc, char** argv) {
     readGraph(arguments.filename, g);
 
     set_start_time();
-    calculate_all_degrees(g);
     long expand_call_count = 0;
-    struct VtxList clq = mc(g, &expand_call_count);
+    struct VtxList clq = mc(g, &expand_call_count, arguments.quiet,
+            arguments.tavares_colour, arguments.vtx_ordering);
     long elapsed_msec = get_elapsed_time_msec();
 
     // sort vertices in clique by index

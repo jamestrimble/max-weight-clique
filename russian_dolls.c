@@ -85,8 +85,7 @@ int main(int argc, char** argv) {
     set_default_arguments();
     argp_parse(&argp, argc, argv, 0, 0, 0);
 
-    struct Graph* g = calloc(1, sizeof(*g));
-    readGraph(arguments.filename, g);
+    struct Graph* g = readGraph(arguments.filename);
 
     long expand_call_count = 0;
     set_start_time();
@@ -110,5 +109,5 @@ int main(int argc, char** argv) {
     if (!check_clique(g, &clq))
         fail("*** Error: the set of vertices found do not induce a clique of the expected weight\n");
 
-    free(g);
+    free_graph(g);
 }

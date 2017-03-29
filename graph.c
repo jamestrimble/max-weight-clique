@@ -49,21 +49,29 @@ struct Graph *new_graph(int n)
 {
     struct Graph *g = calloc(1, sizeof(*g));
     g->n = n;
-//    g->adjmat_elements = calloc(n*n, sizeof(*g->adjmat_elements));
-//    g->label = calloc(n, sizeof(*g->label));
-//    g->degree = calloc(n, sizeof(*g->degree));
-//    g->adjmat = calloc(n, sizeof(*g->adjmat));
-//    for (int i=0; i<n; i++)
-//        g->adjmat[i] = &g->adjmat_elements[i*n];
+    g->degree = calloc(n, sizeof(*g->degree));
+    g->weight = calloc(n, sizeof(*g->weight));
+    g->weighted_deg = calloc(n, sizeof(*g->weighted_deg));
+    g->adjmat = calloc(n, sizeof(*g->adjmat));
+    g->bitadjmat = calloc(n, sizeof(*g->bitadjmat));
+    for (int i=0; i<n; i++) {
+        g->adjmat[i] = calloc(n, sizeof *g->adjmat[i]);
+        g->bitadjmat[i] = calloc((n+BITS_PER_WORD-1)/BITS_PER_WORD, sizeof *g->bitadjmat[i]);
+    }
     return g;
 }
 
 void free_graph(struct Graph *g)
 {
-//    free(g->adjmat_elements);
-//    free(g->label);
-//    free(g->degree);
-//    free(g->adjmat);
+    for (int i=0; i<g->n; i++) {
+        free(g->adjmat[i]);
+        free(g->bitadjmat[i]);
+    }
+    free(g->degree);
+    free(g->weighted_deg);
+    free(g->weight);
+    free(g->adjmat);
+    free(g->bitadjmat);
     free(g);
 }
 
@@ -78,8 +86,7 @@ struct Graph *induced_subgraph(struct Graph *g, int *vv, int vv_len) {
     return subg;
 }
 
-// Precondition: *g is already zeroed out
-void readGraph(char* filename, struct Graph* g) {
+struct Graph *readGraph(char* filename) {
     FILE* f;
     
     if ((f=fopen(filename, "r"))==NULL)
@@ -94,8 +101,9 @@ void readGraph(char* filename, struct Graph* g) {
     int edges_read = 0;
     long wt;
 
-    ssize_t retval;
-    while ((retval=getline(&line, &nchar, f)) != -1) {
+    struct Graph *g = NULL;
+
+    while (getline(&line, &nchar, f) != -1) {
         if (nchar > 0) {
             switch (line[0]) {
             case 'p':
@@ -105,7 +113,7 @@ void readGraph(char* filename, struct Graph* g) {
                 if (nvertices >= MAX_N)
                     fail("Too many vertices. Please recompile with a larger MAX_N.\n");
                 printf("%d edges\n", medges);
-                g->n = nvertices;
+                g = new_graph(nvertices);
                 for (int i=0; i<nvertices; i++)
                     g->weight[i] = 1l;   // default weight
                 break;
@@ -127,6 +135,7 @@ void readGraph(char* filename, struct Graph* g) {
     if (medges>0 && edges_read != medges) fail("Unexpected number of edges.");
 
     fclose(f);
+    return g;
 }
 
 void vtxlist_push_vtx(struct Graph *g, struct VtxList *L, int v) {

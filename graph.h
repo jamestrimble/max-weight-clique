@@ -10,21 +10,13 @@
 #define BITS_PER_WORD (CHAR_BIT * BYTES_PER_WORD)
 #define WORDS_PER_BITSET ((MAX_N+(BITS_PER_WORD-1))/BITS_PER_WORD)
 
-//struct Graph {
-//    int n;
-//    int *degree;                    // the degree of each vertex
-//    edge_label_t **adjmat;          // each element points to a row of the adjacency matrix
-//    unsigned int *label;            // a label for each vertex
-//    edge_label_t *adjmat_elements;  // a flat array containing the n*n elements of the adj. matrix
-//};
-
 struct Graph {
     int n;
-    int degree[MAX_N];
-    long weighted_deg[MAX_N];
-    long weight[MAX_N];
-    bool adjmat[MAX_N][MAX_N];
-    unsigned long long bitadjmat[MAX_N][WORDS_PER_BITSET];
+    int *degree;
+    long *weighted_deg;
+    long *weight;
+    bool **adjmat;
+    unsigned long long **bitadjmat;
 };
 
 struct VtxList {
@@ -53,8 +45,7 @@ struct Graph *new_graph(int n);
 
 void free_graph(struct Graph *g);
 
-// Precondition: *g is already zeroed out
-void readGraph(char* filename, struct Graph* g);
+struct Graph *readGraph(char* filename);
 
 void vtxlist_push_vtx(struct Graph *g, struct VtxList *L, int v);
 

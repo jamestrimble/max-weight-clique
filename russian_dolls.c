@@ -35,12 +35,7 @@ static struct argp_option options[] = {
             "0=one vertex per colour, 1=one colour per vertex, 2=Tavares-style, 3=1 then 2"},
     {"colouring-order", 'k', "ORDER", 0,
             "0=reverse, 1=forwards"},
-    {"vtx-ordering", 'o', "ORDER", 0,
-            "Set vertex ordering heuristic (0=no sorting, 1=increasing deg, "
-            "-1=decreasing deg, 2=increasing weight, -2=decreasing weight, "
-            "3=increasing weighted degree, -3=decreasing weighted degree, "
-            "4=increasing weighted degree plus weight, -4=decreasing weighted degree plus weight, "
-            "9=increasing deg/wt, -9=decreasing deg/wt"},
+    {"vtx-ordering", 'o', "ORDER", 0, vertex_order_help},
     { 0 }
 };
 

@@ -34,10 +34,7 @@ static struct argp_option options[] = {
             "Quiet output"},
     {"tavares-colour", 't', 0, 0,
             "Tavares-style colouring"},
-    {"vtx-ordering", 'o', "ORDER", 0,
-            "Set vertex ordering heuristic (0=no sorting, 1=increasing deg, "
-            "-1=decreasing deg, 2=increasing weight, -2=decreasing weight, "
-            "9=increasing deg/wt, -9=decreasing deg/wt"},
+    {"vtx-ordering", 'o', "ORDER", 0, vertex_order_help},
     { 0 }
 };
 

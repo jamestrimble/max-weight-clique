@@ -8,7 +8,6 @@
 
 #define BYTES_PER_WORD sizeof(unsigned long long)
 #define BITS_PER_WORD (CHAR_BIT * BYTES_PER_WORD)
-#define WORDS_PER_BITSET ((MAX_N+(BITS_PER_WORD-1))/BITS_PER_WORD)
 
 struct Graph {
     int n;

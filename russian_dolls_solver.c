@@ -9,12 +9,8 @@
 #include "util.h"
 #include "russian_dolls_solver.h"
 
-#include <argp.h>
-#include <limits.h>
-#include <locale.h>
 #include <stdbool.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 #define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))

@@ -9,7 +9,6 @@
 #include "util.h"
 #include "colour_order_solver.h"
 
-#include <limits.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>

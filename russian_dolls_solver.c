@@ -167,7 +167,7 @@ struct VtxList mc(struct Graph* g, long *expand_call_count, bool quiet,
     for (int i=0; i<ordered_graph->n; i++) {
         struct VtxList C = {.size=0, .total_wt=0};
         struct UnweightedVtxList P = {.size=0};
-       vtxlist_push_vtx(ordered_graph, &C, i);
+        vtxlist_push_vtx(ordered_graph, &C, i);
         for (int j=0; j<i; j++)
             if (ordered_graph->adjmat[i][j])
                 P.vv[P.size++] = j;

@@ -14,10 +14,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-/*******************************************************************************
-                             Command-line arguments
-*******************************************************************************/
-
 static char doc[] = "Find a maximum clique in a graph in DIMACS format";
 static char args_doc[] = "FILENAME";
 static struct argp_option options[] = {

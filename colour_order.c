@@ -19,6 +19,7 @@ static struct argp_option options[] = {
     {"quiet", 'q', 0, 0, "Quiet output"},
     {"tavares-colour", 't', 0, 0, "Tavares-style colouring"},
     {"vtx-ordering", 'o', "ORDER", 0, vertex_order_help},
+    {"time-limit", 'l', "LIMIT", 0, "Time limit in seconds"},
     { 0 }
 };
 
@@ -26,6 +27,7 @@ static struct {
     bool quiet;
     bool tavares_colour;
     int vtx_ordering;
+    int time_limit;
     char *filename;
     int arg_num;
 } arguments;
@@ -34,6 +36,7 @@ void set_default_arguments() {
     arguments.quiet = false;
     arguments.tavares_colour = false;
     arguments.vtx_ordering = 0;
+    arguments.time_limit = 0;
     arguments.filename = NULL;
     arguments.arg_num = 0;
 }
@@ -48,6 +51,9 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state) {
             break;
         case 'o':
             arguments.vtx_ordering = atoi(arg);
+            break;
+        case 'l':
+            arguments.time_limit = atoi(arg);
             break;
         case ARGP_KEY_ARG:
             if (arguments.arg_num >= 1)
@@ -75,12 +81,17 @@ int main(int argc, char** argv) {
     struct Graph* g = readGraph(arguments.filename);
 
     set_start_time();
+    set_time_limit_sec(arguments.time_limit);
     long expand_call_count = 0;
     struct VtxList clq;
     init_VtxList(&clq, g->n);
     mc(g, &expand_call_count, arguments.quiet,
             arguments.tavares_colour, arguments.vtx_ordering, &clq);
     long elapsed_msec = get_elapsed_time_msec();
+    if (is_timeout_flag_set()) {
+        printf("TIMEOUT\n");
+        elapsed_msec = arguments.time_limit * 1000;
+    }
 
     // sort vertices in clique by index
     INSERTION_SORT(int, clq.vv, clq.size, clq.vv[j-1] > clq.vv[j])

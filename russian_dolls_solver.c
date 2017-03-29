@@ -100,6 +100,10 @@ void expand(struct Graph *g, struct VtxList *C, struct UnweightedVtxList *P,
         long *expand_call_count)
 {
     (*expand_call_count)++;
+    if (*expand_call_count % 100000 == 0)
+        check_for_timeout();
+    if (is_timeout_flag_set()) return;
+
     if (P->size==0 && C->total_wt>incumbent->total_wt)
         copy_VtxList(C, incumbent);
 
@@ -161,6 +165,7 @@ void mc(struct Graph* g, long *expand_call_count, bool quiet,
     long *c = malloc(ordered_graph->n * sizeof(*c));
 
     for (int i=0; i<ordered_graph->n; i++) {
+        if (is_timeout_flag_set()) break;
         struct VtxList C;
         init_VtxList(&C, ordered_graph->n);
         struct UnweightedVtxList P;

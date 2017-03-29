@@ -103,6 +103,10 @@ void expand(struct Graph *g, struct VtxList *C, struct UnweightedVtxList *P,
         bool quiet, bool tavares_colour)
 {
     (*expand_call_count)++;
+    if (*expand_call_count % 100000 == 0)
+        check_for_timeout();
+    if (is_timeout_flag_set()) return;
+
     if (!quiet && P->size==0 && C->total_wt>incumbent->total_wt) {
         copy_VtxList(C, incumbent);
         printf("New incumbent of weight %ld\n", incumbent->total_wt);

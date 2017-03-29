@@ -22,6 +22,7 @@ static struct argp_option options[] = {
             "0=one vertex per colour, 1=one colour per vertex, 2=Tavares-style, 3=1 then 2"},
     {"colouring-order", 'k', "ORDER", 0, "0=reverse, 1=forwards"},
     {"vtx-ordering", 'o', "ORDER", 0, vertex_order_help},
+    {"time-limit", 'l', "LIMIT", 0, "Time limit in seconds"},
     { 0 }
 };
 
@@ -30,6 +31,7 @@ static struct {
     int colouring_type;
     int colouring_order;
     int vtx_ordering;
+    int time_limit;
     char *filename;
     int arg_num;
 } arguments;
@@ -39,6 +41,7 @@ void set_default_arguments() {
     arguments.colouring_type = 0;
     arguments.colouring_order = 0;
     arguments.vtx_ordering = 0;
+    arguments.time_limit = 0;
     arguments.filename = NULL;
     arguments.arg_num = 0;
 }
@@ -60,6 +63,9 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state) {
             break;
         case 'o':
             arguments.vtx_ordering = atoi(arg);
+            break;
+        case 'l':
+            arguments.time_limit = atoi(arg);
             break;
         case ARGP_KEY_ARG:
             if (arguments.arg_num >= 1)
@@ -88,12 +94,17 @@ int main(int argc, char** argv) {
 
     long expand_call_count = 0;
     set_start_time();
+    set_time_limit_sec(arguments.time_limit);
     calculate_all_degrees(g);
     struct VtxList clq;
     init_VtxList(&clq, g->n);
     mc(g, &expand_call_count, arguments.quiet,
             arguments.colouring_type, arguments.colouring_order, arguments.vtx_ordering, &clq);
     long elapsed_msec = get_elapsed_time_msec();
+    if (is_timeout_flag_set()) {
+        printf("TIMEOUT\n");
+        elapsed_msec = arguments.time_limit * 1000;
+    }
 
     // sort vertices in clique by index
     INSERTION_SORT(int, clq.vv, clq.size, clq.vv[j-1] > clq.vv[j])

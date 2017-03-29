@@ -1,8 +1,6 @@
 #ifndef GRAPH_H
 #define GRAPH_H
 
-#define MAX_N 4001
-
 #include <limits.h>
 #include <stdbool.h>
 
@@ -21,13 +19,18 @@ struct Graph {
 struct VtxList {
     long total_wt;
     int size;
-    int vv[MAX_N];
+    int *vv;
 };
 
 struct UnweightedVtxList {
     int size;
-    int vv[MAX_N];
+    int *vv;
 };
+
+void init_VtxList(struct VtxList *l, int capacity);
+void destroy_VtxList(struct VtxList *l);
+void init_UnweightedVtxList(struct UnweightedVtxList *l, int capacity);
+void destroy_UnweightedVtxList(struct UnweightedVtxList *l);
 
 void add_edge(struct Graph *g, int v, int w);
 
@@ -45,6 +48,8 @@ struct Graph *new_graph(int n);
 void free_graph(struct Graph *g);
 
 struct Graph *readGraph(char* filename);
+
+void copy_VtxList(struct VtxList *src, struct VtxList *dest);
 
 void vtxlist_push_vtx(struct Graph *g, struct VtxList *L, int v);
 

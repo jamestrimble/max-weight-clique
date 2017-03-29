@@ -104,37 +104,38 @@ void expand(struct Graph *g, struct VtxList *C, struct UnweightedVtxList *P,
 {
     (*expand_call_count)++;
     if (!quiet && P->size==0 && C->total_wt>incumbent->total_wt) {
-        *incumbent = *C;
+        copy_VtxList(C, incumbent);
         printf("New incumbent of weight %ld\n", incumbent->total_wt);
     }
 
     long *cumulative_wt_bound = malloc(g->n * sizeof *cumulative_wt_bound);
     colouring_bound(g, P, cumulative_wt_bound, tavares_colour);
 
-    struct UnweightedVtxList *new_P = malloc(sizeof *new_P);
+    struct UnweightedVtxList new_P;
+    init_UnweightedVtxList(&new_P, g->n);
 
     for (int i=P->size-1; i>=0 && C->total_wt+cumulative_wt_bound[i]>incumbent->total_wt; i--) {
         int v = P->vv[i];
 
-        new_P->size = 0;
+        new_P.size = 0;
         for (int j=0; j<i; j++) {
             int w = P->vv[j];
             if (g->adjmat[v][w]) {
-                new_P->vv[new_P->size++] = w;
+                new_P.vv[new_P.size++] = w;
             }
         }
 
         vtxlist_push_vtx(g, C, v);
-        expand(g, C, new_P, incumbent, level+1, expand_call_count, quiet, tavares_colour);
+        expand(g, C, &new_P, incumbent, level+1, expand_call_count, quiet, tavares_colour);
         vtxlist_pop_vtx(g, C);
     }
 
-    free(new_P);
+    destroy_UnweightedVtxList(&new_P);
     free(cumulative_wt_bound);
 }
 
-struct VtxList mc(struct Graph* g, long *expand_call_count,
-        bool quiet, bool tavares_colour, int vtx_ordering)
+void mc(struct Graph* g, long *expand_call_count,
+        bool quiet, bool tavares_colour, int vtx_ordering, struct VtxList *incumbent)
 {
     calculate_all_degrees(g);
 
@@ -144,19 +145,19 @@ struct VtxList mc(struct Graph* g, long *expand_call_count,
     struct Graph *ordered_graph = induced_subgraph(g, vv, g->n);
     populate_bit_complement_nd(ordered_graph);
 
-    struct VtxList incumbent = {.size=0, .total_wt=0};
-
-    struct UnweightedVtxList P = {.size=0};
+    struct UnweightedVtxList P;
+    init_UnweightedVtxList(&P, ordered_graph->n);
     for (int v=0; v<g->n; v++) P.vv[P.size++] = v;
-    struct VtxList C = {.size=0, .total_wt=0};
-    expand(ordered_graph, &C, &P, &incumbent, 0, expand_call_count, quiet, tavares_colour);
+    struct VtxList C;
+    init_VtxList(&C, ordered_graph->n);
+    expand(ordered_graph, &C, &P, incumbent, 0, expand_call_count, quiet, tavares_colour);
+    destroy_VtxList(&C);
+    destroy_UnweightedVtxList(&P);
 
     // Use vertex indices from original graph
-    for (int i=0; i<incumbent.size; i++)
-        incumbent.vv[i] = vv[incumbent.vv[i]];
+    for (int i=0; i<incumbent->size; i++)
+        incumbent->vv[i] = vv[incumbent->vv[i]];
 
     free_graph(ordered_graph);
     free(vv);
-
-    return incumbent;
 }

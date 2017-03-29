@@ -90,8 +90,10 @@ int main(int argc, char** argv) {
     long expand_call_count = 0;
     set_start_time();
     calculate_all_degrees(g);
-    struct VtxList clq = mc(g, &expand_call_count, arguments.quiet,
-            arguments.colouring_type, arguments.colouring_order, arguments.vtx_ordering);
+    struct VtxList clq;
+    init_VtxList(&clq, g->n);
+    mc(g, &expand_call_count, arguments.quiet,
+            arguments.colouring_type, arguments.colouring_order, arguments.vtx_ordering, &clq);
     long elapsed_msec = get_elapsed_time_msec();
 
     // sort vertices in clique by index
@@ -110,4 +112,5 @@ int main(int argc, char** argv) {
         fail("*** Error: the set of vertices found do not induce a clique of the expected weight\n");
 
     free_graph(g);
+    destroy_VtxList(&clq);
 }

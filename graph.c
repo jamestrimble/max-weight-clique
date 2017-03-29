@@ -136,12 +136,45 @@ struct Graph *readGraph(char* filename) {
     return g;
 }
 
-void vtxlist_push_vtx(struct Graph *g, struct VtxList *L, int v) {
+void init_VtxList(struct VtxList *l, int capacity)
+{
+    l->vv = malloc(capacity * sizeof *l->vv);
+    l->size = 0;
+    l->total_wt = 0;
+}
+
+void destroy_VtxList(struct VtxList *l)
+{
+    free(l->vv);
+}
+
+void init_UnweightedVtxList(struct UnweightedVtxList *l, int capacity)
+{
+    l->vv = malloc(capacity * sizeof *l->vv);
+    l->size = 0;
+}
+
+void destroy_UnweightedVtxList(struct UnweightedVtxList *l)
+{
+    free(l->vv);
+}
+
+void vtxlist_push_vtx(struct Graph *g, struct VtxList *L, int v)
+{
     L->vv[L->size++] = v;
     L->total_wt += g->weight[v];
 }
 
-void vtxlist_pop_vtx(struct Graph *g, struct VtxList *L) {
+void vtxlist_pop_vtx(struct Graph *g, struct VtxList *L)
+{
     L->size--;
     L->total_wt -= g->weight[L->vv[L->size]];
+}
+
+void copy_VtxList(struct VtxList *src, struct VtxList *dest)
+{
+    dest->size = src->size;
+    dest->total_wt = src->total_wt;
+    for (int i=0; i<src->size; i++)
+        dest->vv[i] = src->vv[i];
 }

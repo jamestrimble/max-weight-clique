@@ -18,16 +18,13 @@
 long colouring_bound(struct Graph *g, struct UnweightedVtxList *P, bool tavares_style,
         int (*next_vtx_fun)(unsigned long long *, int))
 {
-    unsigned long long to_colour[WORDS_PER_BITSET];
-    unsigned long long candidates[WORDS_PER_BITSET];
+    unsigned long long *to_colour = calloc((g->n+BITS_PER_WORD-1)/BITS_PER_WORD, sizeof *to_colour);
+    unsigned long long *candidates = malloc((g->n+BITS_PER_WORD-1)/BITS_PER_WORD * sizeof *candidates);
 
     if (P->size==0) return 0;
 
     int max_v = P->vv[P->size-1];
     int numwords = max_v/BITS_PER_WORD+1;
-
-    for (int i=0; i<numwords; i++)
-        to_colour[i] = 0ull;
 
     for (int i=0; i<P->size; i++)
         set_bit(to_colour, P->vv[i]);
@@ -88,6 +85,8 @@ long colouring_bound(struct Graph *g, struct UnweightedVtxList *P, bool tavares_
             }
         }
     }
+    free(to_colour);
+    free(candidates);
     return total_wt;
 }
 

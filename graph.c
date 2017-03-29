@@ -110,8 +110,6 @@ struct Graph *readGraph(char* filename) {
                 if (sscanf(line, "p edge %d %d", &nvertices, &medges)!=2)
                     fail("Error reading a line beginning with p.\n");
                 printf("%d vertices\n", nvertices);
-                if (nvertices >= MAX_N)
-                    fail("Too many vertices. Please recompile with a larger MAX_N.\n");
                 printf("%d edges\n", medges);
                 g = new_graph(nvertices);
                 for (int i=0; i<nvertices; i++)

@@ -14,10 +14,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-struct {
-    struct UnweightedVtxList P[MAX_N];
-} prealloc;
-
 // Returns an upper bound on weight from the vertices in P
 long colouring_bound(struct Graph *g, struct UnweightedVtxList *P, bool tavares_style,
         int (*next_vtx_fun)(unsigned long long *, int))
@@ -128,11 +124,11 @@ void expand(struct Graph *g, struct VtxList *C, struct UnweightedVtxList *P,
         break;
     }
     
-    struct UnweightedVtxList *new_P = &prealloc.P[level];
+    struct UnweightedVtxList *new_P = malloc(sizeof *new_P);
 
     for (int i=P->size-1; i>=0; i--) {
         int v = P->vv[i];
-        if (C->total_wt + c[v] <= incumbent->total_wt) return;
+        if (C->total_wt + c[v] <= incumbent->total_wt) break;
 
         new_P->size = 0;
         for (int j=0; j<i; j++) {
@@ -148,9 +144,11 @@ void expand(struct Graph *g, struct VtxList *C, struct UnweightedVtxList *P,
         if (colouring_type==0) {
             bound -= g->weight[v];
             if (bound <= incumbent->total_wt)
-                return;
+                break;
         }
     }
+
+    free(new_P);
 }
 
 struct VtxList mc(struct Graph* g, long *expand_call_count, bool quiet,

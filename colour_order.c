@@ -9,7 +9,6 @@
 #include "colour_order_solver.h"
 
 #include <argp.h>
-#include <locale.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -86,10 +85,9 @@ int main(int argc, char** argv) {
     // sort vertices in clique by index
     INSERTION_SORT(int, clq.vv, clq.size, clq.vv[j-1] > clq.vv[j])
 
-    setlocale(LC_NUMERIC, "");
     printf("Weight of max clique: %ld\n", clq.total_wt);
-    printf("Calls to expand():          %'15ld\n", expand_call_count);
-    printf("Time:                       %15ld\n", elapsed_msec);
+    printf("Calls to expand():          %ld\n", expand_call_count);
+    printf("Time:                       %ld\n", elapsed_msec);
 
     for (int i=0; i<clq.size; i++)
         printf("%d ", clq.vv[i]+1);

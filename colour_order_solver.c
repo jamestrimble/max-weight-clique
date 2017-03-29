@@ -37,7 +37,8 @@ void colouring_bound(struct Graph *g, struct UnweightedVtxList *P,
     long bound = 0;
 
     if (tavares_style) {
-        long residual_wt[MAX_N];
+        int *col_class = malloc(g->n * sizeof *col_class);
+        long *residual_wt = malloc(g->n * sizeof *residual_wt);
         for (int i=0; i<P->size; i++)
             residual_wt[P->vv[i]] = g->weight[P->vv[i]];
 
@@ -48,7 +49,6 @@ void colouring_bound(struct Graph *g, struct UnweightedVtxList *P,
             copy_bitset(to_colour, candidates, numwords);
             long class_min_wt = residual_wt[v];
             unset_bit(to_colour, v);
-            int col_class[MAX_N];
             int col_class_size = 1;
             col_class[0] = v;
             // The next line also removes v from the bitset
@@ -73,6 +73,7 @@ void colouring_bound(struct Graph *g, struct UnweightedVtxList *P,
                 }
             }
         }
+        free(residual_wt);
     } else {
         P->size = 0;
         int j = 0;
@@ -111,7 +112,7 @@ void expand(struct Graph *g, struct VtxList *C, struct UnweightedVtxList *P,
         printf("New incumbent of weight %ld\n", incumbent->total_wt);
     }
 
-    long cumulative_wt_bound[MAX_N];
+    long *cumulative_wt_bound = malloc(g->n * sizeof *cumulative_wt_bound);
     colouring_bound(g, P, cumulative_wt_bound, tavares_colour);
 
     struct UnweightedVtxList *new_P = malloc(sizeof *new_P);
@@ -133,6 +134,7 @@ void expand(struct Graph *g, struct VtxList *C, struct UnweightedVtxList *P,
     }
 
     free(new_P);
+    free(cumulative_wt_bound);
 }
 
 struct VtxList mc(struct Graph* g, long *expand_call_count,
@@ -140,7 +142,7 @@ struct VtxList mc(struct Graph* g, long *expand_call_count,
 {
     calculate_all_degrees(g);
 
-    int vv[MAX_N];
+    int *vv = malloc(g->n * sizeof *vv);
     order_vertices(vv, g, vtx_ordering);
 
     struct Graph *ordered_graph = induced_subgraph(g, vv, g->n);
@@ -158,6 +160,7 @@ struct VtxList mc(struct Graph* g, long *expand_call_count,
         incumbent.vv[i] = vv[incumbent.vv[i]];
 
     free_graph(ordered_graph);
+    free(vv);
 
     return incumbent;
 }

@@ -11,13 +11,8 @@
 
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
-
-long c[MAX_N]; 
-
-//long weight[MAX_N]; 
-//bool adjacent[MAX_N][MAX_N];
-//unsigned long long bitadj[MAX_N][WORDS_PER_BITSET];
 
 void push_vtx(struct Graph *g, struct VtxList *L, int v) {
     L->vv[L->size++] = v;
@@ -117,7 +112,7 @@ long vertex_weight_sum(struct Graph *g, struct UnweightedVtxList *P)
 }
 
 void expand(struct Graph *g, struct VtxList *C, struct UnweightedVtxList *P,
-        struct VtxList *incumbent, int level,
+        long *c, struct VtxList *incumbent, int level,
         int (*next_vtx_fun)(unsigned long long *, int), int colouring_type,
         long *expand_call_count)
 {
@@ -158,7 +153,7 @@ void expand(struct Graph *g, struct VtxList *C, struct UnweightedVtxList *P,
         }
 
         push_vtx(g, C, v);
-        expand(g, C, new_P, incumbent, level+1, next_vtx_fun, colouring_type, expand_call_count);
+        expand(g, C, new_P, c, incumbent, level+1, next_vtx_fun, colouring_type, expand_call_count);
         pop_vtx(g, C);
         if (colouring_type==0) {
             bound -= g->weight[v];
@@ -179,6 +174,8 @@ struct VtxList mc(struct Graph* g, long *expand_call_count, bool quiet,
 
     struct VtxList incumbent = {.size=0, .total_wt=0};
 
+    long *c = malloc(ordered_graph->n * sizeof(*c));
+
     for (int i=0; i<ordered_graph->n; i++) {
         struct VtxList C = {.size=0, .total_wt=0};
         struct UnweightedVtxList P = {.size=0};
@@ -186,7 +183,7 @@ struct VtxList mc(struct Graph* g, long *expand_call_count, bool quiet,
         for (int j=0; j<i; j++)
             if (ordered_graph->adjmat[i][j])
                 P.vv[P.size++] = j;
-        expand(ordered_graph, &C, &P, &incumbent, 0, colouring_order ? first_set_bit : last_set_bit,
+        expand(ordered_graph, &C, &P, c, &incumbent, 0, colouring_order ? first_set_bit : last_set_bit,
                 colouring_type, expand_call_count);
         c[i] = incumbent.total_wt;
         if (!quiet)
@@ -197,6 +194,7 @@ struct VtxList mc(struct Graph* g, long *expand_call_count, bool quiet,
     for (int i=0; i<incumbent.size; i++)
         incumbent.vv[i] = vv[incumbent.vv[i]];
 
+    free(c);
     free_graph(ordered_graph);
 
     return incumbent;

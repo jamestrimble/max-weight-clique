@@ -1,15 +1,11 @@
 #define _GNU_SOURCE
 
 #include "graph.h"
+#include "util.h"
 
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-
-static void fail(char* msg) {
-    printf("%s\n", msg);
-    exit(1);
-}
 
 void add_edge(struct Graph *g, int v, int w) {
     g->adjmat[v][w] = true;

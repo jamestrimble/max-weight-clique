@@ -3,11 +3,7 @@
 
 #include "graph.h"
 #include "sorting.h"
-
-static void fail(char* msg) {
-    printf("%s\n", msg);
-    exit(1);
-}
+#include "util.h"
 
 double inc_deg_key(struct Graph *g, int v) { return g->degree[v]; }
 double dec_deg_key(struct Graph *g, int v) { return -g->degree[v]; }

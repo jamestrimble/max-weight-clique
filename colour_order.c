@@ -6,6 +6,7 @@
 #include "sorting.h"
 #include "bitset.h"
 #include "vertex_ordering.h"
+#include "util.h"
 
 #include <argp.h>
 #include <limits.h>
@@ -17,11 +18,6 @@
 
 
 #define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
-
-static void fail(char* msg) {
-    printf("%s\n", msg);
-    exit(1);
-}
 
 /*******************************************************************************
                              Command-line arguments

@@ -9,7 +9,7 @@ int last_set_bit(unsigned long long *bitset, int num_words);
 
 int first_set_bit(unsigned long long *bitset, int num_words);
 
-void reject_adjacent_vertices(unsigned long long *bitset,
+void bitset_intersect_with(unsigned long long *bitset,
                                      unsigned long long *adj,
                                      int num_words);
 

@@ -21,11 +21,11 @@ void calculate_all_degrees(struct Graph *g) {
     }
 }
 
-void populate_bitadjmat(struct Graph *g) {
+void populate_bit_complement_nd(struct Graph *g) {
     for (int i=0; i<g->n; i++) {
         for (int j=0; j<g->n; j++) {
-            if (i==j || g->adjmat[i][j])
-                set_bit(g->bitadjmat[i], j);
+            if (!g->adjmat[i][j] && i!=j)
+                set_bit(g->bit_complement_nd[i], j);
         }
     }
 }
@@ -53,10 +53,10 @@ struct Graph *new_graph(int n)
     g->weight = calloc(n, sizeof(*g->weight));
     g->weighted_deg = calloc(n, sizeof(*g->weighted_deg));
     g->adjmat = calloc(n, sizeof(*g->adjmat));
-    g->bitadjmat = calloc(n, sizeof(*g->bitadjmat));
+    g->bit_complement_nd = calloc(n, sizeof(*g->bit_complement_nd));
     for (int i=0; i<n; i++) {
         g->adjmat[i] = calloc(n, sizeof *g->adjmat[i]);
-        g->bitadjmat[i] = calloc((n+BITS_PER_WORD-1)/BITS_PER_WORD, sizeof *g->bitadjmat[i]);
+        g->bit_complement_nd[i] = calloc((n+BITS_PER_WORD-1)/BITS_PER_WORD, sizeof *g->bit_complement_nd[i]);
     }
     return g;
 }
@@ -65,13 +65,13 @@ void free_graph(struct Graph *g)
 {
     for (int i=0; i<g->n; i++) {
         free(g->adjmat[i]);
-        free(g->bitadjmat[i]);
+        free(g->bit_complement_nd[i]);
     }
     free(g->degree);
     free(g->weighted_deg);
     free(g->weight);
     free(g->adjmat);
-    free(g->bitadjmat);
+    free(g->bit_complement_nd);
     free(g);
 }
 

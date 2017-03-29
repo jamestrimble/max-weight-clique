@@ -30,12 +30,12 @@ int first_set_bit(unsigned long long *bitset,
     return -1;
 }
 
-void reject_adjacent_vertices(unsigned long long *bitset,
+void bitset_intersect_with(unsigned long long *bitset,
                                      unsigned long long *adj,
                                      int num_words)
 {
     for (int i=0; i<num_words; i++)
-        bitset[i] &= ~adj[i];
+        bitset[i] &= adj[i];
 }
 
 void copy_bitset(unsigned long long *src,

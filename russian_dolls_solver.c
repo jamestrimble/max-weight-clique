@@ -46,16 +46,14 @@ long colouring_bound(struct Graph *g, struct UnweightedVtxList *P, bool tavares_
             unset_bit(to_colour, v);
             int col_class_size = 1;
             col_class[0] = v;
-            // The next line also removes v from the bitset
-            reject_adjacent_vertices(candidates, g->bitadjmat[v], numwords);
+            bitset_intersect_with(candidates, g->bit_complement_nd[v], numwords);
             while ((v=next_vtx_fun(candidates, numwords))!=-1) {
                 if (residual_wt[v] < class_min_wt) {
                     class_min_wt = residual_wt[v];
                 }
                 unset_bit(to_colour, v);
                 col_class[col_class_size++] = v;
-                // The next line also removes v from the bitset
-                reject_adjacent_vertices(candidates, g->bitadjmat[v], numwords);
+                bitset_intersect_with(candidates, g->bit_complement_nd[v], numwords);
             }
             for (int i=0; i<col_class_size; i++) {
                 int w = col_class[i];
@@ -72,16 +70,14 @@ long colouring_bound(struct Graph *g, struct UnweightedVtxList *P, bool tavares_
             long class_max_wt = g->weight[v];
             total_wt += g->weight[v];
             unset_bit(to_colour, v);
-            // The next line also removes v from the bitset
-            reject_adjacent_vertices(candidates, g->bitadjmat[v], numwords);
+            bitset_intersect_with(candidates, g->bit_complement_nd[v], numwords);
             while ((v=next_vtx_fun(candidates, numwords))!=-1) {
                 if (g->weight[v] > class_max_wt) {
                     total_wt = total_wt - class_max_wt + g->weight[v];
                     class_max_wt = g->weight[v];
                 }
                 unset_bit(to_colour, v);
-                // The next line also removes v from the bitset
-                reject_adjacent_vertices(candidates, g->bitadjmat[v], numwords);
+                bitset_intersect_with(candidates, g->bit_complement_nd[v], numwords);
             }
         }
     }
@@ -159,7 +155,7 @@ struct VtxList mc(struct Graph* g, long *expand_call_count, bool quiet,
     order_vertices(vv, g, vtx_ordering);
 
     struct Graph *ordered_graph = induced_subgraph(g, vv, g->n);
-    populate_bitadjmat(ordered_graph);
+    populate_bit_complement_nd(ordered_graph);
 
     struct VtxList incumbent = {.size=0, .total_wt=0};
 

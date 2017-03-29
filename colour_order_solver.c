@@ -74,6 +74,7 @@ void colouring_bound(struct Graph *g, struct UnweightedVtxList *P,
             }
         }
         free(residual_wt);
+        free(col_class);
     } else {
         P->size = 0;
         int j = 0;

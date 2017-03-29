@@ -36,7 +36,8 @@ long colouring_bound(struct Graph *g, struct UnweightedVtxList *P, bool tavares_
     long total_wt = 0;
 
     if (tavares_style) {
-        long residual_wt[MAX_N];
+        int *col_class = malloc(g->n * sizeof *col_class);
+        long *residual_wt = malloc(g->n * sizeof *residual_wt);
         for (int i=0; i<P->size; i++) {
             int v = P->vv[i];
             residual_wt[v] = g->weight[v];
@@ -46,7 +47,6 @@ long colouring_bound(struct Graph *g, struct UnweightedVtxList *P, bool tavares_
             copy_bitset(to_colour, candidates, numwords);
             long class_min_wt = residual_wt[v];
             unset_bit(to_colour, v);
-            int col_class[MAX_N];
             int col_class_size = 1;
             col_class[0] = v;
             // The next line also removes v from the bitset
@@ -67,6 +67,8 @@ long colouring_bound(struct Graph *g, struct UnweightedVtxList *P, bool tavares_
             }
             total_wt += class_min_wt;
         }
+        free(residual_wt);
+        free(col_class);
     } else {
         while ((v=next_vtx_fun(to_colour, numwords))!=-1) {
             copy_bitset(to_colour, candidates, numwords);

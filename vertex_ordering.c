@@ -33,7 +33,7 @@ void calc_weighted_degs(struct Graph *g) {
 }
 
 void carraghan_pardalos_order(int *vv, struct Graph *g, bool reverse) {
-    long residual_weighted_deg[MAX_N];
+    long *residual_weighted_deg = malloc(g->n * sizeof(*residual_weighted_deg));
     for (int i=0; i<g->n; i++)
         residual_weighted_deg[i] = g->weighted_deg[i];
 
@@ -67,6 +67,7 @@ void carraghan_pardalos_order(int *vv, struct Graph *g, bool reverse) {
 
         }
     }
+    free(residual_weighted_deg);
 }
 void order_vertices(int *vv, struct Graph *g, int vtx_ordering) {
     for (int i=0; i<g->n; i++)

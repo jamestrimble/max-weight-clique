@@ -13,8 +13,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
-
 long weight[MAX_N]; 
 long c[MAX_N]; 
 bool adjacent[MAX_N][MAX_N];

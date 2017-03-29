@@ -13,8 +13,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
-
 void push_vtx(struct VtxList *L, int v, struct Graph *g) {
     L->vv[L->size++] = v;
     L->total_wt += g->weight[v];

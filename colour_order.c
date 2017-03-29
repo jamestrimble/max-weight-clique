@@ -74,7 +74,6 @@ int main(int argc, char** argv) {
     argp_parse(&argp, argc, argv, 0, 0, 0);
 
     struct Graph* g = calloc(1, sizeof(*g));
-    printf("debug1\n");
     readGraph(arguments.filename, g);
 
     set_start_time();

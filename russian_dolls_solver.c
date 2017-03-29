@@ -13,19 +13,20 @@
 #include <stdio.h>
 #include <string.h>
 
-long weight[MAX_N]; 
 long c[MAX_N]; 
-bool adjacent[MAX_N][MAX_N];
-unsigned long long bitadj[MAX_N][WORDS_PER_BITSET];
 
-void push_vtx(struct VtxList *L, int v) {
+//long weight[MAX_N]; 
+//bool adjacent[MAX_N][MAX_N];
+//unsigned long long bitadj[MAX_N][WORDS_PER_BITSET];
+
+void push_vtx(struct Graph *g, struct VtxList *L, int v) {
     L->vv[L->size++] = v;
-    L->total_wt += weight[v];
+    L->total_wt += g->weight[v];
 }
 
-void pop_vtx(struct VtxList *L) {
+void pop_vtx(struct Graph *g, struct VtxList *L) {
     L->size--;
-    L->total_wt -= weight[L->vv[L->size]];
+    L->total_wt -= g->weight[L->vv[L->size]];
 }
 
 struct {
@@ -33,7 +34,7 @@ struct {
 } prealloc;
 
 // Returns an upper bound on weight from the vertices in P
-long colouring_bound(struct UnweightedVtxList *P, bool tavares_style,
+long colouring_bound(struct Graph *g, struct UnweightedVtxList *P, bool tavares_style,
         int (*next_vtx_fun)(unsigned long long *, int))
 {
     unsigned long long to_colour[WORDS_PER_BITSET];
@@ -57,7 +58,7 @@ long colouring_bound(struct UnweightedVtxList *P, bool tavares_style,
         long residual_wt[MAX_N];
         for (int i=0; i<P->size; i++) {
             int v = P->vv[i];
-            residual_wt[v] = weight[v];
+            residual_wt[v] = g->weight[v];
         }
 
         while ((v=next_vtx_fun(to_colour, numwords))!=-1) {
@@ -68,7 +69,7 @@ long colouring_bound(struct UnweightedVtxList *P, bool tavares_style,
             int col_class_size = 1;
             col_class[0] = v;
             // The next line also removes v from the bitset
-            reject_adjacent_vertices(candidates, bitadj[v], numwords);
+            reject_adjacent_vertices(candidates, g->bitadjmat[v], numwords);
             while ((v=next_vtx_fun(candidates, numwords))!=-1) {
                 if (residual_wt[v] < class_min_wt) {
                     class_min_wt = residual_wt[v];
@@ -76,7 +77,7 @@ long colouring_bound(struct UnweightedVtxList *P, bool tavares_style,
                 unset_bit(to_colour, v);
                 col_class[col_class_size++] = v;
                 // The next line also removes v from the bitset
-                reject_adjacent_vertices(candidates, bitadj[v], numwords);
+                reject_adjacent_vertices(candidates, g->bitadjmat[v], numwords);
             }
             for (int i=0; i<col_class_size; i++) {
                 int w = col_class[i];
@@ -88,34 +89,34 @@ long colouring_bound(struct UnweightedVtxList *P, bool tavares_style,
     } else {
         while ((v=next_vtx_fun(to_colour, numwords))!=-1) {
             copy_bitset(to_colour, candidates, numwords);
-            long class_max_wt = weight[v];
-            total_wt += weight[v];
+            long class_max_wt = g->weight[v];
+            total_wt += g->weight[v];
             unset_bit(to_colour, v);
             // The next line also removes v from the bitset
-            reject_adjacent_vertices(candidates, bitadj[v], numwords);
+            reject_adjacent_vertices(candidates, g->bitadjmat[v], numwords);
             while ((v=next_vtx_fun(candidates, numwords))!=-1) {
-                if (weight[v] > class_max_wt) {
-                    total_wt = total_wt - class_max_wt + weight[v];
-                    class_max_wt = weight[v];
+                if (g->weight[v] > class_max_wt) {
+                    total_wt = total_wt - class_max_wt + g->weight[v];
+                    class_max_wt = g->weight[v];
                 }
                 unset_bit(to_colour, v);
                 // The next line also removes v from the bitset
-                reject_adjacent_vertices(candidates, bitadj[v], numwords);
+                reject_adjacent_vertices(candidates, g->bitadjmat[v], numwords);
             }
         }
     }
     return total_wt;
 }
 
-long vertex_weight_sum(struct UnweightedVtxList *P)
+long vertex_weight_sum(struct Graph *g, struct UnweightedVtxList *P)
 {
     long bound = 0;
     for (int i=0; i<P->size; i++)
-        bound += weight[P->vv[i]];
+        bound += g->weight[P->vv[i]];
     return bound;
 }
 
-void expand(struct VtxList *C, struct UnweightedVtxList *P,
+void expand(struct Graph *g, struct VtxList *C, struct UnweightedVtxList *P,
         struct VtxList *incumbent, int level,
         int (*next_vtx_fun)(unsigned long long *, int), int colouring_type,
         long *expand_call_count)
@@ -127,18 +128,18 @@ void expand(struct VtxList *C, struct UnweightedVtxList *P,
     long bound = 0;
     switch (colouring_type) {
     case 0:
-        bound = C->total_wt + vertex_weight_sum(P);
+        bound = C->total_wt + vertex_weight_sum(g, P);
         if (bound <= incumbent->total_wt) return;
         break;
     case 1:
-        if (C->total_wt + colouring_bound(P, false, next_vtx_fun) <= incumbent->total_wt) return;
+        if (C->total_wt + colouring_bound(g, P, false, next_vtx_fun) <= incumbent->total_wt) return;
         break;
     case 2:
-        if (C->total_wt + colouring_bound(P, true, next_vtx_fun) <= incumbent->total_wt) return;
+        if (C->total_wt + colouring_bound(g, P, true, next_vtx_fun) <= incumbent->total_wt) return;
         break;
     case 3:
-        if (C->total_wt + colouring_bound(P, false, next_vtx_fun) <= incumbent->total_wt) return;
-        if (C->total_wt + colouring_bound(P, true, next_vtx_fun) <= incumbent->total_wt) return;
+        if (C->total_wt + colouring_bound(g, P, false, next_vtx_fun) <= incumbent->total_wt) return;
+        if (C->total_wt + colouring_bound(g, P, true, next_vtx_fun) <= incumbent->total_wt) return;
         break;
     }
     
@@ -151,16 +152,16 @@ void expand(struct VtxList *C, struct UnweightedVtxList *P,
         new_P->size = 0;
         for (int j=0; j<i; j++) {
             int w = P->vv[j];
-            if (adjacent[v][w]) {
+            if (g->adjmat[v][w]) {
                 new_P->vv[new_P->size++] = w;
             }
         }
 
-        push_vtx(C, v);
-        expand(C, new_P, incumbent, level+1, next_vtx_fun, colouring_type, expand_call_count);
-        pop_vtx(C);
+        push_vtx(g, C, v);
+        expand(g, C, new_P, incumbent, level+1, next_vtx_fun, colouring_type, expand_call_count);
+        pop_vtx(g, C);
         if (colouring_type==0) {
-            bound -= weight[v];
+            bound -= g->weight[v];
             if (bound <= incumbent->total_wt)
                 return;
         }
@@ -173,28 +174,19 @@ struct VtxList mc(struct Graph* g, long *expand_call_count, bool quiet,
     int vv[MAX_N];
     order_vertices(vv, g, vtx_ordering);
 
-    memset(bitadj, 0, sizeof(bitadj));
-    for (int i=0; i<g->n; i++) {
-        for (int j=0; j<g->n; j++) {
-            adjacent[i][j] = g->adjmat[vv[i]][vv[j]];
-            if (i==j || adjacent[i][j])
-                set_bit(bitadj[i], j);
-        }
-    }
-
-    for (int i=0; i<g->n; i++)
-        weight[i] = g->weight[vv[i]];
+    struct Graph *ordered_graph = induced_subgraph(g, vv, g->n);
+    populate_bitadjmat(ordered_graph);
 
     struct VtxList incumbent = {.size=0, .total_wt=0};
 
-    for (int i=0; i<g->n; i++) {
+    for (int i=0; i<ordered_graph->n; i++) {
         struct VtxList C = {.size=0, .total_wt=0};
         struct UnweightedVtxList P = {.size=0};
-        push_vtx(&C, i);
+        push_vtx(ordered_graph, &C, i);
         for (int j=0; j<i; j++)
-            if (adjacent[i][j])
+            if (ordered_graph->adjmat[i][j])
                 P.vv[P.size++] = j;
-        expand(&C, &P, &incumbent, 0, colouring_order ? first_set_bit : last_set_bit,
+        expand(ordered_graph, &C, &P, &incumbent, 0, colouring_order ? first_set_bit : last_set_bit,
                 colouring_type, expand_call_count);
         c[i] = incumbent.total_wt;
         if (!quiet)
@@ -204,6 +196,8 @@ struct VtxList mc(struct Graph* g, long *expand_call_count, bool quiet,
     // Use vertex indices from original graph
     for (int i=0; i<incumbent.size; i++)
         incumbent.vv[i] = vv[incumbent.vv[i]];
+
+    free_graph(ordered_graph);
 
     return incumbent;
 }

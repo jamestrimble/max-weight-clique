@@ -16,7 +16,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-
 #define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
 
 /*******************************************************************************
@@ -158,12 +157,6 @@ void tavares_colouring_bound(struct UnweightedVtxList *P, long *cumulative_wt_bo
         }
     }
 }
-
-struct ColourClass {
-    int start;
-    int size;
-    long max_wt;
-};
 
 void colouring_bound(struct UnweightedVtxList *P, long *cumulative_wt_bound) {
     unsigned long long to_colour[WORDS_PER_BITSET];

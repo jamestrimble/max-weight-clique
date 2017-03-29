@@ -156,7 +156,7 @@ void expand(struct Graph *g, struct VtxList *C, struct UnweightedVtxList *P,
 struct VtxList mc(struct Graph* g, long *expand_call_count, bool quiet,
         int colouring_type, int colouring_order, int vtx_ordering)
 {
-    int vv[MAX_N];
+    int *vv = malloc(g->n * sizeof *vv);
     order_vertices(vv, g, vtx_ordering);
 
     struct Graph *ordered_graph = induced_subgraph(g, vv, g->n);
@@ -186,6 +186,7 @@ struct VtxList mc(struct Graph* g, long *expand_call_count, bool quiet,
 
     free(c);
     free_graph(ordered_graph);
+    free(vv);
 
     return incumbent;
 }

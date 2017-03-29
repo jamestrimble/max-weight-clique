@@ -35,7 +35,7 @@ struct {
 } prealloc;
 
 // Returns an upper bound on weight from the vertices in P
-long tavares_colouring_bound(struct UnweightedVtxList *P,
+long colouring_bound(struct UnweightedVtxList *P, bool tavares_style,
         int (*next_vtx_fun)(unsigned long long *, int))
 {
     unsigned long long to_colour[WORDS_PER_BITSET];
@@ -55,76 +55,55 @@ long tavares_colouring_bound(struct UnweightedVtxList *P,
     int v;
     long total_wt = 0;
 
-    long residual_wt[MAX_N];
-    for (int i=0; i<P->size; i++) {
-        int v = P->vv[i];
-        residual_wt[v] = weight[v];
-    }
+    if (tavares_style) {
+        long residual_wt[MAX_N];
+        for (int i=0; i<P->size; i++) {
+            int v = P->vv[i];
+            residual_wt[v] = weight[v];
+        }
 
-    while ((v=next_vtx_fun(to_colour, numwords))!=-1) {
-        copy_bitset(to_colour, candidates, numwords);
-        long class_min_wt = residual_wt[v];
-        unset_bit(to_colour, v);
-        int col_class[MAX_N];
-        int col_class_size = 1;
-        col_class[0] = v;
-        // The next line also removes v from the bitset
-        reject_adjacent_vertices(candidates, bitadj[v], numwords);
-        while ((v=next_vtx_fun(candidates, numwords))!=-1) {
-            if (residual_wt[v] < class_min_wt) {
-                class_min_wt = residual_wt[v];
-            }
+        while ((v=next_vtx_fun(to_colour, numwords))!=-1) {
+            copy_bitset(to_colour, candidates, numwords);
+            long class_min_wt = residual_wt[v];
             unset_bit(to_colour, v);
-            col_class[col_class_size++] = v;
+            int col_class[MAX_N];
+            int col_class_size = 1;
+            col_class[0] = v;
             // The next line also removes v from the bitset
             reject_adjacent_vertices(candidates, bitadj[v], numwords);
-        }
-        for (int i=0; i<col_class_size; i++) {
-            int w = col_class[i];
-            residual_wt[w] -= class_min_wt;
-            if (residual_wt[w] > 0) set_bit(to_colour, w);
-        }
-        total_wt += class_min_wt;
-    }
-    return total_wt;
-}
-
-// Returns an upper bound on weight from the vertices in P
-long colouring_bound(struct UnweightedVtxList *P,
-        int (*next_vtx_fun)(unsigned long long *, int))
-{
-    unsigned long long to_colour[WORDS_PER_BITSET];
-    unsigned long long candidates[WORDS_PER_BITSET];
-
-    if (P->size==0) return 0;
-
-    int max_v = P->vv[P->size-1];
-    int numwords = max_v/BITS_PER_WORD+1;
-
-    for (int i=0; i<numwords; i++)
-        to_colour[i] = 0ull;
-
-    for (int i=0; i<P->size; i++)
-        set_bit(to_colour, P->vv[i]);
-
-    int v;
-    long total_wt = 0;
-
-    while ((v=next_vtx_fun(to_colour, numwords))!=-1) {
-        copy_bitset(to_colour, candidates, numwords);
-        long class_max_wt = weight[v];
-        total_wt += weight[v];
-        unset_bit(to_colour, v);
-        // The next line also removes v from the bitset
-        reject_adjacent_vertices(candidates, bitadj[v], numwords);
-        while ((v=next_vtx_fun(candidates, numwords))!=-1) {
-            if (weight[v] > class_max_wt) {
-                total_wt = total_wt - class_max_wt + weight[v];
-                class_max_wt = weight[v];
+            while ((v=next_vtx_fun(candidates, numwords))!=-1) {
+                if (residual_wt[v] < class_min_wt) {
+                    class_min_wt = residual_wt[v];
+                }
+                unset_bit(to_colour, v);
+                col_class[col_class_size++] = v;
+                // The next line also removes v from the bitset
+                reject_adjacent_vertices(candidates, bitadj[v], numwords);
             }
+            for (int i=0; i<col_class_size; i++) {
+                int w = col_class[i];
+                residual_wt[w] -= class_min_wt;
+                if (residual_wt[w] > 0) set_bit(to_colour, w);
+            }
+            total_wt += class_min_wt;
+        }
+    } else {
+        while ((v=next_vtx_fun(to_colour, numwords))!=-1) {
+            copy_bitset(to_colour, candidates, numwords);
+            long class_max_wt = weight[v];
+            total_wt += weight[v];
             unset_bit(to_colour, v);
             // The next line also removes v from the bitset
             reject_adjacent_vertices(candidates, bitadj[v], numwords);
+            while ((v=next_vtx_fun(candidates, numwords))!=-1) {
+                if (weight[v] > class_max_wt) {
+                    total_wt = total_wt - class_max_wt + weight[v];
+                    class_max_wt = weight[v];
+                }
+                unset_bit(to_colour, v);
+                // The next line also removes v from the bitset
+                reject_adjacent_vertices(candidates, bitadj[v], numwords);
+            }
         }
     }
     return total_wt;
@@ -154,14 +133,14 @@ void expand(struct VtxList *C, struct UnweightedVtxList *P,
         if (bound <= incumbent->total_wt) return;
         break;
     case 1:
-        if (C->total_wt + colouring_bound(P, next_vtx_fun) <= incumbent->total_wt) return;
+        if (C->total_wt + colouring_bound(P, false, next_vtx_fun) <= incumbent->total_wt) return;
         break;
     case 2:
-        if (C->total_wt + tavares_colouring_bound(P, next_vtx_fun) <= incumbent->total_wt) return;
+        if (C->total_wt + colouring_bound(P, true, next_vtx_fun) <= incumbent->total_wt) return;
         break;
     case 3:
-        if (C->total_wt + colouring_bound(P, next_vtx_fun) <= incumbent->total_wt) return;
-        if (C->total_wt + tavares_colouring_bound(P, next_vtx_fun) <= incumbent->total_wt) return;
+        if (C->total_wt + colouring_bound(P, false, next_vtx_fun) <= incumbent->total_wt) return;
+        if (C->total_wt + colouring_bound(P, true, next_vtx_fun) <= incumbent->total_wt) return;
         break;
     }
     

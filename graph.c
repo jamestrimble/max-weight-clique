@@ -2,6 +2,7 @@
 
 #include "graph.h"
 #include "util.h"
+#include "bitset.h"
 
 #include <stdbool.h>
 #include <stdio.h>
@@ -20,6 +21,15 @@ void calculate_all_degrees(struct Graph *g) {
     }
 }
 
+void populate_bitadjmat(struct Graph *g) {
+    for (int i=0; i<g->n; i++) {
+        for (int j=0; j<g->n; j++) {
+            if (i==j || g->adjmat[i][j])
+                set_bit(g->bitadjmat[i], j);
+        }
+    }
+}
+
 // Checks if a set of vertices induces a clique
 bool check_clique(struct Graph* g, struct VtxList* clq) {
     long total_wt = 0;
@@ -33,6 +43,39 @@ bool check_clique(struct Graph* g, struct VtxList* clq) {
             if (!g->adjmat[clq->vv[i]][clq->vv[j]])
                 return false;
     return true;
+}
+
+struct Graph *new_graph(int n)
+{
+    struct Graph *g = calloc(1, sizeof(*g));
+    g->n = n;
+//    g->adjmat_elements = calloc(n*n, sizeof(*g->adjmat_elements));
+//    g->label = calloc(n, sizeof(*g->label));
+//    g->degree = calloc(n, sizeof(*g->degree));
+//    g->adjmat = calloc(n, sizeof(*g->adjmat));
+//    for (int i=0; i<n; i++)
+//        g->adjmat[i] = &g->adjmat_elements[i*n];
+    return g;
+}
+
+void free_graph(struct Graph *g)
+{
+//    free(g->adjmat_elements);
+//    free(g->label);
+//    free(g->degree);
+//    free(g->adjmat);
+    free(g);
+}
+
+struct Graph *induced_subgraph(struct Graph *g, int *vv, int vv_len) {
+    struct Graph* subg = new_graph(vv_len);
+    for (int i=0; i<subg->n; i++)
+        for (int j=0; j<subg->n; j++)
+            subg->adjmat[i][j] = g->adjmat[vv[i]][vv[j]];
+
+    for (int i=0; i<subg->n; i++)
+        subg->weight[i] = g->weight[vv[i]];
+    return subg;
 }
 
 // Precondition: *g is already zeroed out
@@ -63,7 +106,6 @@ void readGraph(char* filename, struct Graph* g) {
                     fail("Too many vertices. Please recompile with a larger MAX_N.\n");
                 printf("%d edges\n", medges);
                 g->n = nvertices;
-                g->bitset_words = (g->n + (BITS_PER_WORD-1)) / BITS_PER_WORD;
                 for (int i=0; i<nvertices; i++)
                     g->weight[i] = 1l;   // default weight
                 break;

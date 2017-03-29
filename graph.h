@@ -1,3 +1,6 @@
+#ifndef GRAPH_H
+#define GRAPH_H
+
 #define MAX_N 4001
 
 #include <limits.h>
@@ -37,3 +40,5 @@ bool check_clique(struct Graph* g, struct VtxList* clq);
 
 // Precondition: *g is already zeroed out
 void readGraph(char* filename, struct Graph* g);
+
+#endif

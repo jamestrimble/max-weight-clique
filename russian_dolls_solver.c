@@ -14,16 +14,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-void push_vtx(struct Graph *g, struct VtxList *L, int v) {
-    L->vv[L->size++] = v;
-    L->total_wt += g->weight[v];
-}
-
-void pop_vtx(struct Graph *g, struct VtxList *L) {
-    L->size--;
-    L->total_wt -= g->weight[L->vv[L->size]];
-}
-
 struct {
     struct UnweightedVtxList P[MAX_N];
 } prealloc;
@@ -152,9 +142,9 @@ void expand(struct Graph *g, struct VtxList *C, struct UnweightedVtxList *P,
             }
         }
 
-        push_vtx(g, C, v);
+        vtxlist_push_vtx(g, C, v);
         expand(g, C, new_P, c, incumbent, level+1, next_vtx_fun, colouring_type, expand_call_count);
-        pop_vtx(g, C);
+        vtxlist_pop_vtx(g, C);
         if (colouring_type==0) {
             bound -= g->weight[v];
             if (bound <= incumbent->total_wt)
@@ -179,7 +169,7 @@ struct VtxList mc(struct Graph* g, long *expand_call_count, bool quiet,
     for (int i=0; i<ordered_graph->n; i++) {
         struct VtxList C = {.size=0, .total_wt=0};
         struct UnweightedVtxList P = {.size=0};
-        push_vtx(ordered_graph, &C, i);
+       vtxlist_push_vtx(ordered_graph, &C, i);
         for (int j=0; j<i; j++)
             if (ordered_graph->adjmat[i][j])
                 P.vv[P.size++] = j;

@@ -13,16 +13,6 @@
 #include <stdio.h>
 #include <string.h>
 
-void push_vtx(struct VtxList *L, int v, struct Graph *g) {
-    L->vv[L->size++] = v;
-    L->total_wt += g->weight[v];
-}
-
-void pop_vtx(struct VtxList *L, struct Graph *g) {
-    L->size--;
-    L->total_wt -= g->weight[L->vv[L->size]];
-}
-
 struct {
     struct UnweightedVtxList P[MAX_N];
 } prealloc;
@@ -140,9 +130,9 @@ void expand(struct Graph *g, struct VtxList *C, struct UnweightedVtxList *P,
             }
         }
 
-        push_vtx(C, v, g);
+        vtxlist_push_vtx(g, C, v);
         expand(g, C, new_P, incumbent, level+1, expand_call_count, quiet, tavares_colour);
-        pop_vtx(C, g);
+        vtxlist_pop_vtx(g, C);
     }
 }
 

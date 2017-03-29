@@ -56,4 +56,8 @@ void free_graph(struct Graph *g);
 // Precondition: *g is already zeroed out
 void readGraph(char* filename, struct Graph* g);
 
+void vtxlist_push_vtx(struct Graph *g, struct VtxList *L, int v);
+
+void vtxlist_pop_vtx(struct Graph *g, struct VtxList *L);
+
 #endif

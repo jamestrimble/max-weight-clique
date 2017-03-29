@@ -128,3 +128,13 @@ void readGraph(char* filename, struct Graph* g) {
 
     fclose(f);
 }
+
+void vtxlist_push_vtx(struct Graph *g, struct VtxList *L, int v) {
+    L->vv[L->size++] = v;
+    L->total_wt += g->weight[v];
+}
+
+void vtxlist_pop_vtx(struct Graph *g, struct VtxList *L) {
+    L->size--;
+    L->total_wt -= g->weight[L->vv[L->size]];
+}

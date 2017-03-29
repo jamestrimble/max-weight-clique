@@ -303,7 +303,7 @@ void calc_weighted_degs(struct Graph *g) {
 }
 
 void carraghan_pardalos_order(int *vv, struct Graph *g, bool reverse) {
-    int residual_weighted_deg[MAX_N];
+    long residual_weighted_deg[MAX_N];
     for (int i=0; i<g->n; i++)
         residual_weighted_deg[i] = g->weighted_deg[i];
 

@@ -5,6 +5,7 @@
 #include "graph.h"
 #include "sorting.h"
 #include "bitset.h"
+#include "vertex_ordering.h"
 
 #include <argp.h>
 #include <limits.h>
@@ -255,48 +256,9 @@ void expand(struct VtxList *C, struct UnweightedVtxList *P, struct VtxList *incu
     }
 }
 
-double inc_deg_key(struct Graph *g, int v) { return g->degree[v]; }
-double dec_deg_key(struct Graph *g, int v) { return -g->degree[v]; }
-double inc_weighted_deg_key(struct Graph *g, int v) { return g->weighted_deg[v]; }
-double dec_weighted_deg_key(struct Graph *g, int v) { return -g->weighted_deg[v]; }
-double inc_wt_key(struct Graph *g, int v) { return g->weight[v]; }
-double dec_wt_key(struct Graph *g, int v) { return -g->weight[v]; }
-
-double inc_wt_over_deg_key(struct Graph *g, int v) {
-    return (double)g->weight[v] / g->degree[v];
-}
-double dec_wt_over_deg_key(struct Graph *g, int v) {
-    return -(double)g->weight[v] / g->degree[v];
-}
-
-void calc_weighted_degs(struct Graph *g) {
-    for (int i=0; i<g->n; i++) {
-        g->weighted_deg[i] = 0;
-        for (int j=0; j<g->n; j++) {
-            if (g->adjmat[i][j]) {
-                g->weighted_deg[i] += g->weight[j];
-            }
-        }
-    }
-}
-
 struct VtxList mc(struct Graph* g, long *expand_call_count) {
     int vv[MAX_N];
-    for (int i=0; i<g->n; i++)
-        vv[i] = i;
-
-    switch(arguments.vtx_ordering) {
-    case  0: break;  // no sorting
-    case  1: INSERTION_SORT_VV(inc_deg_key) break;
-    case -1: INSERTION_SORT_VV(dec_deg_key) break;
-    case  2: INSERTION_SORT_VV(inc_wt_key) break;
-    case -2: INSERTION_SORT_VV(dec_wt_key) break;
-    case  3: calc_weighted_degs(g); INSERTION_SORT_VV(inc_weighted_deg_key) break;
-    case -3: calc_weighted_degs(g); INSERTION_SORT_VV(dec_weighted_deg_key) break;
-    case  9: INSERTION_SORT_VV(inc_wt_over_deg_key) break;
-    case -9: INSERTION_SORT_VV(dec_wt_over_deg_key) break;
-    default: fail("Unrecognised vertex order");
-    }
+    order_vertices(vv, g, arguments.vtx_ordering);
 
     memset(bitadj, 0, sizeof(bitadj));
     for (int i=0; i<g->n; i++) {

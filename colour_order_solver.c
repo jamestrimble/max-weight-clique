@@ -11,11 +11,8 @@
 
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
-
-struct {
-    struct UnweightedVtxList P[MAX_N];
-} prealloc;
 
 void colouring_bound(struct Graph *g, struct UnweightedVtxList *P,
         long *cumulative_wt_bound, bool tavares_style)
@@ -117,7 +114,7 @@ void expand(struct Graph *g, struct VtxList *C, struct UnweightedVtxList *P,
     long cumulative_wt_bound[MAX_N];
     colouring_bound(g, P, cumulative_wt_bound, tavares_colour);
 
-    struct UnweightedVtxList *new_P = &prealloc.P[level];
+    struct UnweightedVtxList *new_P = malloc(sizeof *new_P);
 
     for (int i=P->size-1; i>=0 && C->total_wt+cumulative_wt_bound[i]>incumbent->total_wt; i--) {
         int v = P->vv[i];
@@ -134,6 +131,8 @@ void expand(struct Graph *g, struct VtxList *C, struct UnweightedVtxList *P,
         expand(g, C, new_P, incumbent, level+1, expand_call_count, quiet, tavares_colour);
         vtxlist_pop_vtx(g, C);
     }
+
+    free(new_P);
 }
 
 struct VtxList mc(struct Graph* g, long *expand_call_count,

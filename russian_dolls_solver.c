@@ -27,9 +27,9 @@ int get_unique_remaining_vtx(struct Clause *c, int *reason) {
 }
 
 void unit_propagate_once(struct Graph *g, struct ListOfClauses *cc,
-        struct ClauseMembership *cm, struct IntStack *I)
+        struct ClauseMembership *cm, struct IntStackWithoutDups *I)
 {
-    struct IntStackWithoutDups S;
+    struct IntStackWithoutDups S;   // TODO: probably wouldn't have dups anyway?
     init_stack_without_dups(&S);
     for (int i=0; i<cc->size; i++) {
         struct Clause *clause = &cc->clause[i];
@@ -53,22 +53,43 @@ void unit_propagate_once(struct Graph *g, struct ListOfClauses *cc,
         if (u->remaining_vv_count != 1)
             fail("Unexpected remaining_vv_count");
         int v = get_unique_remaining_vtx(u, reason);
-        reason[v] = u_idx;
+        //TODO: think about the next commented-out line. Should it be included???
+        //reason[v] = u_idx;
         for (int i=0; i<g->nonadjlist_len[v]; i++) {
             int w = g->nonadjlist[v][i];
-            reason[w] = u_idx;
-            for (int j=0; j<cm->list_len[w]; j++) {
-                int c_idx = cm->list[w][j];
-                struct Clause *c = &cc->clause[c_idx];
-                c->remaining_vv_count--;
-                if (c->remaining_vv_count==1) {
-                    push_without_dups(&S, c_idx);
-                } else if (c->remaining_vv_count==0) {
-
+            if (reason[w] == -1) {
+                reason[w] = u_idx;
+                for (int j=0; j<cm->list_len[w]; j++) {
+                    int c_idx = cm->list[w][j];
+                    struct Clause *c = &cc->clause[c_idx];
+                    c->remaining_vv_count--;
+                    if (c->remaining_vv_count==1) {
+                        push_without_dups(&S, c_idx);
+                    } else if (c->remaining_vv_count==0) {
+                        //printf("yay!\n");
+                        struct IntQueue Q;
+                        init_queue(&Q);
+                        enqueue(&Q, c_idx);
+                        push_without_dups(I, c_idx);
+                        while(!queue_empty(&Q)) {
+                            int d_idx = dequeue(&Q);
+                            struct Clause *d = &cc->clause[d_idx];
+                            for (int k=0; k<d->vv_len; k++) {
+                                int t = d->vv[k];
+                                int r = reason[t];
+                                if (r != -1) {  // " removed literal l' "
+                                    if (!I->on_stack[r]) {
+                                        enqueue(&Q, r);
+                                        push_without_dups(I, r);
+                                    }
+                                }
+                            }
+                        }
+                        return;
+                    }
                 }
             }
         }
-
     }
 }
 
@@ -86,12 +107,12 @@ long unit_propagate(struct Graph *g, struct ListOfClauses *cc)
     for (int i=0; i<cc->size; i++)
         cc->clause[i].used = false;
 
-    struct IntStack I;
+    struct IntStackWithoutDups I;
 
     long retval = 0;
 
     while (true) {
-        init_stack(&I);
+        init_stack_without_dups(&I);
         unit_propagate_once(g, cc, &cm, &I);
 
         if (I.size>0) {

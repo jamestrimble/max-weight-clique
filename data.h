@@ -57,6 +57,7 @@ struct ListOfClauses {
     int size;
 };
 
+// Which clauses does each vertex belong to?
 struct ClauseMembership {
     int list[BIGNUM][BIGNUM];
     int list_len[BIGNUM];

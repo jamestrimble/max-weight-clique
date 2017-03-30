@@ -41,6 +41,8 @@ void unit_propagate_once(struct Graph *g, struct ListOfClauses *cc,
             }
         }
     }
+//    INSERTION_SORT(int, S.vals, S.size,
+//            (cc->clause[S.vals[j-1]].weight > cc->clause[S.vals[j]].weight))
 
     // each vertex has a clause index as its reason, or -1
     int reason[BIGNUM];
@@ -93,6 +95,24 @@ void unit_propagate_once(struct Graph *g, struct ListOfClauses *cc,
     }
 }
 
+void remove_clause_membership(struct ClauseMembership *cm, int v, int clause_idx)
+{
+    // TODO: make this more efficient when you're sure it works
+    int pos = -1;
+    for (int i=0; i<cm->list_len[v]; i++) {
+        if (cm->list[v][i] == clause_idx) {
+            pos = i;
+            break;
+        }
+    }
+    if (pos==-1)
+        fail("Couldn't find clause in membership list");
+    int tmp = cm->list[v][cm->list_len[v]-1];
+    cm->list[v][cm->list_len[v]-1] = cm->list[v][pos];
+    cm->list[v][pos] = tmp;
+    cm->list_len[v]--;
+}
+
 long unit_propagate(struct Graph *g, struct ListOfClauses *cc)
 {
     static struct ClauseMembership cm;
@@ -119,16 +139,22 @@ long unit_propagate(struct Graph *g, struct ListOfClauses *cc)
             long min_wt = LONG_MAX;
             for (int i=0; i<I.size; i++) {
                 int c_idx = I.vals[i];
+                cc->clause[c_idx].used = true;
                 long wt = cc->clause[c_idx].weight;
                 if (wt < min_wt)
                     min_wt = wt;
+                // Remove references to this clause from CM
+                for (int j=0; j<cc->clause[c_idx].vv_len; j++) {
+                    int v = cc->clause[c_idx].vv[j];
+                    remove_clause_membership(&cm, v, c_idx);
+                }
             }
             retval += min_wt;
-            // TODO: mark clauses as used, and update cm
+            // TODO: update cm
         } else {
-            // TODO: break from loop of unit propagations
+            break;
         }
-        break;  // TODO: don't break!
+//        break;  // TODO: don't break!
     }
     return retval;
 }

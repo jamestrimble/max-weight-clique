@@ -118,8 +118,8 @@ long unit_propagate(struct Graph *g, struct ListOfClauses *cc)
         if (I.size>0) {
             long min_wt = LONG_MAX;
             for (int i=0; i<I.size; i++) {
-                int v = I.vals[i];
-                long wt = g->weight[v];
+                int c_idx = I.vals[i];
+                long wt = cc->clause[c_idx].weight;
                 if (wt < min_wt)
                     min_wt = wt;
             }

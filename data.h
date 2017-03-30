@@ -14,6 +14,19 @@ void push(struct IntStack *s, int val);
 int pop(struct IntStack *s);
 
 
+struct IntStackWithoutDups {
+    int size;
+    int vals[BIGNUM];
+    bool on_stack[BIGNUM];
+};
+
+void init_stack_without_dups(struct IntStackWithoutDups *s);
+
+void push_without_dups(struct IntStackWithoutDups *s, int val);
+
+int pop_without_dups(struct IntStackWithoutDups *s);
+
+
 struct IntQueue {
     int start;
     int size;
@@ -40,7 +53,7 @@ struct Clause {
 
 
 struct ListOfClauses {
-    struct Clause cc[BIGNUM];
+    struct Clause clause[BIGNUM];
     int size;
 };
 

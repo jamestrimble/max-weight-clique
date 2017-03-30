@@ -21,6 +21,33 @@ int pop(struct IntStack *s)
 }
 
 
+void init_stack_without_dups(struct IntStackWithoutDups *s)
+{
+    s->size = 0;
+    for (int i=0; i<BIGNUM; i++)
+        s->on_stack[i] = false;
+}
+
+void push_without_dups(struct IntStackWithoutDups *s, int val)
+{
+    if (!s->on_stack[val]) {
+        if (s->size == BIGNUM)
+            exit(1);
+        s->vals[s->size++] = val;
+        s->on_stack[val] = true;
+    }
+}
+
+int pop_without_dups(struct IntStackWithoutDups *s)
+{
+    if (s->size == 0)
+        exit(1);
+    int val = s->vals[--s->size];
+    s->on_stack[val] = false;
+    return val;
+}
+
+
 void init_queue(struct IntQueue *q)
 {
     q->start = 0;

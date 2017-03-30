@@ -2,6 +2,7 @@
 #define _POSIX_SOURCE
 
 #include "c_program_timing.h"
+#include "data.h"
 #include "graph.h"
 #include "sorting.h"
 #include "bitset.h"
@@ -13,6 +14,103 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+int get_unique_remaining_vtx(struct Clause *c, int *reason) {
+    for (int i=0; i<c->vv_len; i++) {
+        int v = c->vv[i];
+        if (reason[v] == -1)
+            return v;
+    }
+
+    fail("Should'nt have reached here in get_unique_remaining_vtx");
+    return -1;
+}
+
+void unit_propagate_once(struct Graph *g, struct ListOfClauses *cc,
+        struct ClauseMembership *cm, struct IntStack *I)
+{
+    struct IntStackWithoutDups S;
+    init_stack_without_dups(&S);
+    for (int i=0; i<cc->size; i++) {
+        struct Clause *clause = &cc->clause[i];
+        if (!clause->used) {
+            clause->remaining_vv_count = clause->vv_len;
+            clause->was_pushed_to_Q = false;
+            if (clause->vv_len==1) {
+                push_without_dups(&S, i);
+            }
+        }
+    }
+
+    // each vertex has a clause index as its reason, or -1
+    int reason[BIGNUM];
+    for (int i=0; i<g->n; i++)
+        reason[i] = -1;
+
+    while (S.size) {
+        int u_idx = pop_without_dups(&S);
+        struct Clause *u = &cc->clause[u_idx];
+        if (u->remaining_vv_count != 1)
+            fail("Unexpected remaining_vv_count");
+        int v = get_unique_remaining_vtx(u, reason);
+        reason[v] = u_idx;
+        for (int i=0; i<g->nonadjlist_len[v]; i++) {
+            int w = g->nonadjlist[v][i];
+            reason[w] = u_idx;
+            for (int j=0; j<cm->list_len[w]; j++) {
+                int c_idx = cm->list[w][j];
+                struct Clause *c = &cc->clause[c_idx];
+                c->remaining_vv_count--;
+                if (c->remaining_vv_count==1) {
+                    push_without_dups(&S, c_idx);
+                } else if (c->remaining_vv_count==0) {
+
+                }
+            }
+        }
+
+    }
+}
+
+long unit_propagate(struct Graph *g, struct ListOfClauses *cc)
+{
+    static struct ClauseMembership cm;
+    ClauseMembership_init(&cm);
+    for (int i=0; i<cc->size; i++) {
+        struct Clause *clause = &cc->clause[i];
+        for (int j=0; j<clause->vv_len; j++) {
+            int v = clause->vv[j];
+            cm.list[v][cm.list_len[v]++] = i;
+        }
+    }
+    for (int i=0; i<cc->size; i++)
+        cc->clause[i].used = false;
+
+    struct IntStack I;
+
+    long retval = 0;
+
+    while (true) {
+        init_stack(&I);
+        unit_propagate_once(g, cc, &cm, &I);
+
+        if (I.size>0) {
+            long min_wt = LONG_MAX;
+            for (int i=0; i<I.size; i++) {
+                int v = I.vals[i];
+                long wt = g->weight[v];
+                if (wt < min_wt)
+                    min_wt = wt;
+            }
+            retval += min_wt;
+            // TODO: mark clauses as used, and update cm
+        } else {
+            // TODO: break from loop of unit propagations
+        }
+        break;  // TODO: don't break!
+    }
+    return retval;
+}
 
 // Returns an upper bound on weight from the vertices in P
 long colouring_bound(struct Graph *g, struct UnweightedVtxList *P, bool tavares_style,
@@ -33,8 +131,10 @@ long colouring_bound(struct Graph *g, struct UnweightedVtxList *P, bool tavares_
     long total_wt = 0;
 
     if (tavares_style) {
-        int *col_class = malloc(g->n * sizeof *col_class);
+//        int *col_class = malloc(g->n * sizeof *col_class);
         long *residual_wt = malloc(g->n * sizeof *residual_wt);
+        static struct ListOfClauses cc;
+        cc.size = 0;
         for (int i=0; i<P->size; i++) {
             int v = P->vv[i];
             residual_wt[v] = g->weight[v];
@@ -44,26 +144,29 @@ long colouring_bound(struct Graph *g, struct UnweightedVtxList *P, bool tavares_
             copy_bitset(to_colour, candidates, numwords);
             long class_min_wt = residual_wt[v];
             unset_bit(to_colour, v);
-            int col_class_size = 1;
-            col_class[0] = v;
+            cc.clause[cc.size].vv_len = 1;
+            cc.clause[cc.size].vv[0] = v;
             bitset_intersect_with(candidates, g->bit_complement_nd[v], numwords);
             while ((v=next_vtx_fun(candidates, numwords))!=-1) {
                 if (residual_wt[v] < class_min_wt) {
                     class_min_wt = residual_wt[v];
                 }
                 unset_bit(to_colour, v);
-                col_class[col_class_size++] = v;
+                cc.clause[cc.size].vv[cc.clause[cc.size].vv_len++] = v;
                 bitset_intersect_with(candidates, g->bit_complement_nd[v], numwords);
             }
-            for (int i=0; i<col_class_size; i++) {
-                int w = col_class[i];
+            for (int i=0; i<cc.clause[cc.size].vv_len; i++) {
+                int w = cc.clause[cc.size].vv[i];
                 residual_wt[w] -= class_min_wt;
                 if (residual_wt[w] > 0) set_bit(to_colour, w);
             }
+            cc.clause[cc.size].weight = class_min_wt;
             total_wt += class_min_wt;
+            cc.size++;
         }
+        total_wt -= unit_propagate(g, &cc);
         free(residual_wt);
-        free(col_class);
+//        free(col_class);
     } else {
         while ((v=next_vtx_fun(to_colour, numwords))!=-1) {
             copy_bitset(to_colour, candidates, numwords);

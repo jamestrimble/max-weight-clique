@@ -1,6 +1,6 @@
 #include <stdbool.h>
 
-#define BIGNUM 500
+#define BIGNUM 2000
 
 struct IntStack {
     int size;

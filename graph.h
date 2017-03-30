@@ -9,7 +9,7 @@
 
 //TODO: don't define this separately in two headers
 //TODO: or better yet, don't used fixed-size arrays
-#define BIGNUM 500
+#define BIGNUM 2000
 
 struct Graph {
     int n;

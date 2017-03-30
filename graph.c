@@ -30,6 +30,18 @@ void populate_bit_complement_nd(struct Graph *g) {
     }
 }
 
+void make_nonadjlists(struct Graph *g)
+{
+    for (int i=0; i<g->n; i++) {
+        g->nonadjlist_len[i] = 0;
+        for (int j=0; j<g->n; j++) {
+            if (i!=j && !g->adjmat[i][j]) {
+                g->nonadjlist[i][g->nonadjlist_len[i]++] = j;
+            }
+        }
+    }
+}
+
 // Checks if a set of vertices induces a clique
 bool check_clique(struct Graph* g, struct VtxList* clq) {
     long total_wt = 0;

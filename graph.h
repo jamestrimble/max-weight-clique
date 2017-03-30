@@ -7,14 +7,22 @@
 #define BYTES_PER_WORD sizeof(unsigned long long)
 #define BITS_PER_WORD (CHAR_BIT * BYTES_PER_WORD)
 
+//TODO: don't define this separately in two headers
+//TODO: or better yet, don't used fixed-size arrays
+#define BIGNUM 500
+
 struct Graph {
     int n;
     int *degree;
     long *weighted_deg;
     long *weight;
     bool **adjmat;
+    int nonadjlist[BIGNUM][BIGNUM];
+    int nonadjlist_len[BIGNUM];
     unsigned long long **bit_complement_nd;
 };
+
+void make_nonadjlists(struct Graph *g);
 
 struct VtxList {
     long total_wt;

@@ -161,6 +161,22 @@ void mc(struct Graph* g, long *expand_call_count, bool quiet,
 
     struct Graph *ordered_graph = induced_subgraph(g, vv, g->n);
     populate_bit_complement_nd(ordered_graph);
+    make_nonadjlists(ordered_graph);
+
+    //////////////
+    // check they're correct
+    calculate_all_degrees(ordered_graph);
+    for (int i=0; i<ordered_graph->n; i++) {
+        if (ordered_graph->nonadjlist_len[i] != ordered_graph->n - 1 - ordered_graph->degree[i])
+            fail("Incorrect nonadj list length");
+        for (int j=0; j<ordered_graph->nonadjlist_len[i]; j++) {
+            if (ordered_graph->adjmat[i][ordered_graph->nonadjlist[i][j]])
+                fail("Unexpected edge");
+            if (ordered_graph->adjmat[ordered_graph->nonadjlist[i][j]][i])
+                fail("Unexpected edge");
+        }
+    }
+    /////////////
 
     long *c = malloc(ordered_graph->n * sizeof(*c));
 

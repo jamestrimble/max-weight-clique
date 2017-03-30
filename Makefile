@@ -1,5 +1,5 @@
-HEADERS = graph.h c_program_timing.h sorting.h bitset.h vertex_ordering.h util.h
-SHARED_C = graph.c c_program_timing.c vertex_ordering.c util.c bitset.c 
+HEADERS = graph.h c_program_timing.h sorting.h bitset.h vertex_ordering.h util.h data.h
+SHARED_C = graph.c c_program_timing.c vertex_ordering.c util.c bitset.c  data.c
 
 all: russian_dolls colour_order
 

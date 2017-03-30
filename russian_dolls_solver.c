@@ -22,7 +22,7 @@ int get_unique_remaining_vtx(struct Clause *c, int *reason) {
             return v;
     }
 
-    fail("Should'nt have reached here in get_unique_remaining_vtx");
+    fail("Shouldn't have reache30 here in get_unique_remaining_vtx");
     return -1;
 }
 

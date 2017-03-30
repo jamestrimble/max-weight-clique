@@ -117,6 +117,9 @@ int main(int argc, char** argv) {
         printf("%d ", clq.vv[i]+1);
     printf("\n");
 
+    printf("Stats: size, weight of max weight clique, ms elapsed, node count\n");
+    printf("%d %ld %ld %ld\n", clq.size, clq.total_wt, elapsed_msec, expand_call_count);
+
     if (!check_clique(g, &clq))
         fail("*** Error: the set of vertices found do not induce a clique of the expected weight\n");
 

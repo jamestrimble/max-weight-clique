@@ -6,7 +6,7 @@
 
 struct timespec start_time;
 
-long time_limit_sec;
+long time_limit_sec = 0;
 
 bool timed_out = false;
 

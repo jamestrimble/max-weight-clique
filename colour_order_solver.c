@@ -8,12 +8,164 @@
 #include "vertex_ordering.h"
 #include "util.h"
 #include "colour_order_solver.h"
+#include "data.h"
 
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+int get_unique_remaining_vtx(struct Clause *c, int *reason) {
+    for (int i=0; i<c->vv_len; i++) {
+        int v = c->vv[i];
+        if (reason[v] == -1)
+            return v;
+    }
+
+    fail("Shouldn't have reache30 here in get_unique_remaining_vtx");
+    return -1;
+}
+
+void unit_propagate_once(struct Graph *g, struct ListOfClauses *cc,
+        struct ClauseMembership *cm, struct IntStackWithoutDups *I)
+{
+    struct IntStackWithoutDups S;   // TODO: probably wouldn't have dups anyway?
+    init_stack_without_dups(&S);
+    for (int i=0; i<cc->size; i++) {
+        struct Clause *clause = &cc->clause[i];
+        if (!clause->used) {
+            clause->remaining_vv_count = clause->vv_len;
+            clause->was_pushed_to_Q = false;
+            if (clause->vv_len==1) {
+                push_without_dups(&S, i);
+            }
+        }
+    }
+//    INSERTION_SORT(int, S.vals, S.size,
+//            (cc->clause[S.vals[j-1]].weight > cc->clause[S.vals[j]].weight))
+
+    // each vertex has a clause index as its reason, or -1
+    int reason[BIGNUM];
+    for (int i=0; i<g->n; i++)
+        reason[i] = -1;
+
+    while (S.size) {
+        //printf("S.size %d\n", S.size);
+        int u_idx = pop_without_dups(&S);
+        struct Clause *u = &cc->clause[u_idx];
+        if (u->remaining_vv_count != 1)
+            fail("Unexpected remaining_vv_count");
+        int v = get_unique_remaining_vtx(u, reason);
+        //TODO: think about the next commented-out line. Should it be included???
+        //reason[v] = u_idx;
+        for (int i=0; i<g->nonadjlist_len[v]; i++) {
+            int w = g->nonadjlist[v][i];
+            if (reason[w] == -1) {
+                reason[w] = u_idx;
+                for (int j=0; j<cm->list_len[w]; j++) {
+                    int c_idx = cm->list[w][j];
+                    struct Clause *c = &cc->clause[c_idx];
+                    c->remaining_vv_count--;
+                    if (c->remaining_vv_count==1) {
+                        push_without_dups(&S, c_idx);
+                    } else if (c->remaining_vv_count==0) {
+                        //printf("yay!\n");
+                        struct IntQueue Q;
+                        init_queue(&Q);
+                        enqueue(&Q, c_idx);
+                        push_without_dups(I, c_idx);
+                        while(!queue_empty(&Q)) {
+                            int d_idx = dequeue(&Q);
+                            struct Clause *d = &cc->clause[d_idx];
+                            for (int k=0; k<d->vv_len; k++) {
+                                int t = d->vv[k];
+                                int r = reason[t];
+                                if (r != -1) {  // " removed literal l' "
+                                    if (!I->on_stack[r]) {
+                                        enqueue(&Q, r);
+                                        push_without_dups(I, r);
+                                    }
+                                }
+                            }
+                        }
+                        return;
+                    }
+                }
+            }
+        }
+    }
+}
+
+void remove_clause_membership(struct ClauseMembership *cm, int v, int clause_idx)
+{
+    // TODO: make this more efficient when you're sure it works
+    int pos = -1;
+    for (int i=0; i<cm->list_len[v]; i++) {
+        if (cm->list[v][i] == clause_idx) {
+            pos = i;
+            break;
+        }
+    }
+    if (pos==-1)
+        fail("Couldn't find clause in membership list");
+    int tmp = cm->list[v][cm->list_len[v]-1];
+    cm->list[v][cm->list_len[v]-1] = cm->list[v][pos];
+    cm->list[v][pos] = tmp;
+    cm->list_len[v]--;
+}
+
+long unit_propagate(struct Graph *g, struct ListOfClauses *cc)
+{
+    static struct ClauseMembership cm;
+    ClauseMembership_init(&cm);
+    for (int i=0; i<cc->size; i++) {
+        struct Clause *clause = &cc->clause[i];
+        for (int j=0; j<clause->vv_len; j++) {
+            int v = clause->vv[j];
+            cm.list[v][cm.list_len[v]++] = i;
+        }
+    }
+    for (int i=0; i<cc->size; i++)
+        cc->clause[i].used = false;
+
+    struct IntStackWithoutDups I;
+
+    long retval = 0;
+
+    while (true) {
+        init_stack_without_dups(&I);
+        unit_propagate_once(g, cc, &cm, &I);
+
+        if (I.size>0) {
+            long min_wt = LONG_MAX;
+            int max_idx = -1;
+            for (int i=0; i<I.size; i++) {
+                int c_idx = I.vals[i];
+                cc->clause[c_idx].used = true;
+                long wt = cc->clause[c_idx].weight;
+                if (wt < min_wt)
+                    min_wt = wt;
+                if (c_idx > max_idx)
+                    max_idx = c_idx;
+                // Remove references to this clause from CM
+                for (int j=0; j<cc->clause[c_idx].vv_len; j++) {
+                    int v = cc->clause[c_idx].vv[j];
+                    remove_clause_membership(&cm, v, c_idx);
+                }
+            }
+            //printf("%d\n", max_idx);
+            //printf("%ld ", cc->clause[max_idx].weight);
+            cc->clause[max_idx].weight -= min_wt;  // decrease weight of last clause in set
+            //printf("%ld\n", cc->clause[max_idx].weight);
+            retval += min_wt;
+            // TODO: update cm
+        } else {
+            break;
+        }
+//        break;  // TODO: don't break!
+    }
+    return retval;
+}
 void colouring_bound(struct Graph *g, struct UnweightedVtxList *P,
         long *cumulative_wt_bound, bool tavares_style)
 {
@@ -34,42 +186,78 @@ void colouring_bound(struct Graph *g, struct UnweightedVtxList *P,
     long bound = 0;
 
     if (tavares_style) {
-        int *col_class = malloc(g->n * sizeof *col_class);
+//        int *col_class = malloc(g->n * sizeof *col_class);
         long *residual_wt = malloc(g->n * sizeof *residual_wt);
+        static struct ListOfClauses cc;
+        cc.size = 0;
         for (int i=0; i<P->size; i++)
             residual_wt[P->vv[i]] = g->weight[P->vv[i]];
 
-        P->size = 0;
-
+        int last_clause[BIGNUM];  // last_clause[v] is the index of the last
+                                  // clause in which v appears
         while ((v=last_set_bit(to_colour, numwords))!=-1) {
             numwords = v/BITS_PER_WORD+1;
             copy_bitset(to_colour, candidates, numwords);
             long class_min_wt = residual_wt[v];
             unset_bit(to_colour, v);
-            int col_class_size = 1;
-            col_class[0] = v;
+            cc.clause[cc.size].vv_len = 1;
+            cc.clause[cc.size].vv[0] = v;
             bitset_intersect_with(candidates, g->bit_complement_nd[v], numwords);
             while ((v=last_set_bit(candidates, v/BITS_PER_WORD+1))!=-1) {
                 if (residual_wt[v] < class_min_wt)
                     class_min_wt = residual_wt[v];
                 unset_bit(to_colour, v);
-                col_class[col_class_size++] = v;
+                cc.clause[cc.size].vv[cc.clause[cc.size].vv_len++] = v;
                 bitset_intersect_with(candidates, g->bit_complement_nd[v], v/BITS_PER_WORD+1);
             }
-            bound += class_min_wt;
-            for (int i=0; i<col_class_size; i++) {
-                int w = col_class[i];
+//            printf("%ld\n", class_min_wt);
+            for (int i=0; i<cc.clause[cc.size].vv_len; i++) {
+                int w = cc.clause[cc.size].vv[i];
                 residual_wt[w] -= class_min_wt;
                 if (residual_wt[w] > 0) {
                     set_bit(to_colour, w);
                 } else {
+                    last_clause[w] = cc.size;
+                }
+            }
+            bound += class_min_wt;
+            cc.clause[cc.size].weight = class_min_wt;
+            cc.size++;
+        }
+        long wt_decrease = unit_propagate(g, &cc);
+        long check_wt = bound-wt_decrease;
+        for (int i=0; i<cc.size; i++) {
+            struct Clause *clause = &cc.clause[i];
+            check_wt -= clause->weight;
+        }
+        if (check_wt != 0)
+            fail("Unexpected total weight");
+
+//        long oldbound = bound;
+//        printf("%ld ", bound);
+
+        for (int i=0; i<P->size; i++)
+            residual_wt[P->vv[i]] = g->weight[P->vv[i]];
+        P->size = 0;
+        bound = 0;
+        for (int i=0; i<cc.size; i++) {
+            struct Clause *clause = &cc.clause[i];
+            if (clause->weight < 0)
+                fail("Unexpectedly low clause weight");
+            bound += clause->weight;
+//            printf("%ld\n", bound);
+            for (int j=0; j<clause->vv_len; j++) {
+                int w = clause->vv[j];
+                residual_wt[w] -= clause->weight;
+                if (last_clause[w] == i) {
                     cumulative_wt_bound[P->size] = bound;
                     P->vv[P->size++] = w;
                 }
             }
         }
+//        printf("%ld\n", oldbound-bound);
         free(residual_wt);
-        free(col_class);
+//        free(col_class);
     } else {
         P->size = 0;
         int j = 0;
@@ -148,6 +336,22 @@ void mc(struct Graph* g, long *expand_call_count,
 
     struct Graph *ordered_graph = induced_subgraph(g, vv, g->n);
     populate_bit_complement_nd(ordered_graph);
+    make_nonadjlists(ordered_graph);
+
+    //////////////
+    // check they're correct
+    calculate_all_degrees(ordered_graph);
+    for (int i=0; i<ordered_graph->n; i++) {
+        if (ordered_graph->nonadjlist_len[i] != ordered_graph->n - 1 - ordered_graph->degree[i])
+            fail("Incorrect nonadj list length");
+        for (int j=0; j<ordered_graph->nonadjlist_len[i]; j++) {
+            if (ordered_graph->adjmat[i][ordered_graph->nonadjlist[i][j]])
+                fail("Unexpected edge");
+            if (ordered_graph->adjmat[ordered_graph->nonadjlist[i][j]][i])
+                fail("Unexpected edge");
+        }
+    }
+    /////////////
 
     struct UnweightedVtxList P;
     init_UnweightedVtxList(&P, ordered_graph->n);

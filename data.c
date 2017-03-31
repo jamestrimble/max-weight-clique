@@ -28,6 +28,14 @@ void init_stack_without_dups(struct IntStackWithoutDups *s)
         s->on_stack[i] = false;
 }
 
+void fast_init_stack_without_dups(struct IntStackWithoutDups *s,
+        int max_member_val)
+{
+    s->size = 0;
+    for (int i=0; i<max_member_val; i++)
+        s->on_stack[i] = false;
+}
+
 void push_without_dups(struct IntStackWithoutDups *s, int val)
 {
     if (!s->on_stack[val]) {
@@ -77,5 +85,12 @@ int dequeue(struct IntQueue *q)
 void ClauseMembership_init(struct ClauseMembership *cm)
 {
     for (int i=0; i<BIGNUM; i++)
+        cm->list_len[i] = 0;
+}
+
+void fast_ClauseMembership_init(struct ClauseMembership *cm,
+        int num_vertices)
+{
+    for (int i=0; i<num_vertices; i++)
         cm->list_len[i] = 0;
 }

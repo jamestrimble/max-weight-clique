@@ -30,7 +30,7 @@ void unit_propagate_once(struct Graph *g, struct ListOfClauses *cc,
         struct ClauseMembership *cm, struct IntStackWithoutDups *I)
 {
     struct IntStackWithoutDups S;   // TODO: probably wouldn't have dups anyway?
-    init_stack_without_dups(&S);
+    fast_init_stack_without_dups(&S, cc->size);
     for (int i=0; i<cc->size; i++) {
         struct Clause *clause = &cc->clause[i];
         if (!clause->used) {
@@ -117,7 +117,7 @@ void remove_clause_membership(struct ClauseMembership *cm, int v, int clause_idx
 long unit_propagate(struct Graph *g, struct ListOfClauses *cc, long target_reduction)
 {
     static struct ClauseMembership cm;
-    ClauseMembership_init(&cm);
+    fast_ClauseMembership_init(&cm, g->n);
     for (int i=0; i<cc->size; i++) {
         struct Clause *clause = &cc->clause[i];
         for (int j=0; j<clause->vv_len; j++) {
@@ -133,7 +133,7 @@ long unit_propagate(struct Graph *g, struct ListOfClauses *cc, long target_reduc
     long retval = 0;
 
     while (retval < target_reduction) {
-        init_stack_without_dups(&I);
+        fast_init_stack_without_dups(&I, cc->size);
         unit_propagate_once(g, cc, &cm, &I);
 
         if (I.size>0) {

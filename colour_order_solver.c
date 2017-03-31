@@ -114,7 +114,7 @@ void remove_clause_membership(struct ClauseMembership *cm, int v, int clause_idx
     cm->list_len[v]--;
 }
 
-long unit_propagate(struct Graph *g, struct ListOfClauses *cc)
+long unit_propagate(struct Graph *g, struct ListOfClauses *cc, long target_reduction)
 {
     static struct ClauseMembership cm;
     ClauseMembership_init(&cm);
@@ -158,16 +158,16 @@ long unit_propagate(struct Graph *g, struct ListOfClauses *cc)
             cc->clause[max_idx].weight -= min_wt;  // decrease weight of last clause in set
             //printf("%ld\n", cc->clause[max_idx].weight);
             retval += min_wt;
-            // TODO: update cm
+            if (retval >= target_reduction)
+                break;
         } else {
             break;
         }
-//        break;  // TODO: don't break!
     }
     return retval;
 }
 void colouring_bound(struct Graph *g, struct UnweightedVtxList *P,
-        long *cumulative_wt_bound, bool tavares_style)
+        long *cumulative_wt_bound, bool tavares_style, long target)
 {
     unsigned long long *to_colour = calloc((g->n+BITS_PER_WORD-1)/BITS_PER_WORD, sizeof *to_colour);
     unsigned long long *candidates = malloc((g->n+BITS_PER_WORD-1)/BITS_PER_WORD * sizeof *candidates);
@@ -224,14 +224,8 @@ void colouring_bound(struct Graph *g, struct UnweightedVtxList *P,
             cc.clause[cc.size].weight = class_min_wt;
             cc.size++;
         }
-        long wt_decrease = unit_propagate(g, &cc);
-        long check_wt = bound-wt_decrease;
-        for (int i=0; i<cc.size; i++) {
-            struct Clause *clause = &cc.clause[i];
-            check_wt -= clause->weight;
-        }
-        if (check_wt != 0)
-            fail("Unexpected total weight");
+        if (bound > target)
+            unit_propagate(g, &cc, bound-target);
 
 //        long oldbound = bound;
 //        printf("%ld ", bound);
@@ -301,7 +295,7 @@ void expand(struct Graph *g, struct VtxList *C, struct UnweightedVtxList *P,
     }
 
     long *cumulative_wt_bound = malloc(g->n * sizeof *cumulative_wt_bound);
-    colouring_bound(g, P, cumulative_wt_bound, tavares_colour);
+    colouring_bound(g, P, cumulative_wt_bound, tavares_colour, incumbent->total_wt - C->total_wt);
 
     struct UnweightedVtxList new_P;
     init_UnweightedVtxList(&new_P, g->n);

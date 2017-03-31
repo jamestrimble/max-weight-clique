@@ -35,7 +35,6 @@ void unit_propagate_once(struct Graph *g, struct ListOfClauses *cc,
         struct Clause *clause = &cc->clause[i];
         if (!clause->used) {
             clause->remaining_vv_count = clause->vv_len;
-            clause->was_pushed_to_Q = false;
             if (clause->vv_len==1) {
                 push_without_dups(&S, i);
             }

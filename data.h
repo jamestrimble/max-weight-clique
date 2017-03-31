@@ -20,6 +20,9 @@ struct IntStackWithoutDups {
     bool on_stack[BIGNUM];
 };
 
+void fast_init_stack_without_dups(struct IntStackWithoutDups *s,
+        int max_member_val);
+
 void init_stack_without_dups(struct IntStackWithoutDups *s);
 
 void push_without_dups(struct IntStackWithoutDups *s, int val);
@@ -48,7 +51,6 @@ struct Clause {
     int vv_len;
     int remaining_vv_count;
     bool used;    // has it been used in an inconsistent subset?
-    bool was_pushed_to_Q;
 };
 
 
@@ -64,3 +66,6 @@ struct ClauseMembership {
 };
 
 void ClauseMembership_init(struct ClauseMembership *cm);
+
+void fast_ClauseMembership_init(struct ClauseMembership *cm,
+        int num_vertices);

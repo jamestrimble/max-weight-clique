@@ -39,17 +39,17 @@ void carraghan_pardalos_order(int *vv, struct Graph *g, bool reverse) {
 
     for (int i=0; i<g->n; i++) {
         // find vertex with lowest residual_weighted_deg
-        int best_v = -1;
+        int best_v_pos = -1;
         long best_wt_deg = LONG_MAX;
         for (int j=i; j<g->n; j++) {
             int v = vv[j];
             if (residual_weighted_deg[v] < best_wt_deg) {
                 best_wt_deg = residual_weighted_deg[v];
-                best_v = v;
+                best_v_pos = j;
             }
         }
-        int v = vv[best_v];
-        vv[best_v] = vv[i];
+        int v = vv[best_v_pos];
+        vv[best_v_pos] = vv[i];
         vv[i] = v;
 
         for (int j=i+1; j<g->n; j++) {

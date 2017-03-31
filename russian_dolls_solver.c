@@ -113,7 +113,7 @@ void remove_clause_membership(struct ClauseMembership *cm, int v, int clause_idx
     cm->list_len[v]--;
 }
 
-long unit_propagate(struct Graph *g, struct ListOfClauses *cc)
+long unit_propagate(struct Graph *g, struct ListOfClauses *cc, long target_reduction)
 {
     static struct ClauseMembership cm;
     ClauseMembership_init(&cm);
@@ -131,7 +131,7 @@ long unit_propagate(struct Graph *g, struct ListOfClauses *cc)
 
     long retval = 0;
 
-    while (true) {
+    while (retval < target_reduction) {
         init_stack_without_dups(&I);
         unit_propagate_once(g, cc, &cm, &I);
 
@@ -161,7 +161,7 @@ long unit_propagate(struct Graph *g, struct ListOfClauses *cc)
 
 // Returns an upper bound on weight from the vertices in P
 long colouring_bound(struct Graph *g, struct UnweightedVtxList *P, bool tavares_style,
-        int (*next_vtx_fun)(unsigned long long *, int), bool use_unitprop)
+        int (*next_vtx_fun)(unsigned long long *, int), bool use_unitprop, long target)
 {
     unsigned long long *to_colour = calloc((g->n+BITS_PER_WORD-1)/BITS_PER_WORD, sizeof *to_colour);
     unsigned long long *candidates = malloc((g->n+BITS_PER_WORD-1)/BITS_PER_WORD * sizeof *candidates);
@@ -212,7 +212,7 @@ long colouring_bound(struct Graph *g, struct UnweightedVtxList *P, bool tavares_
             cc.size++;
         }
         if (use_unitprop)
-            total_wt -= unit_propagate(g, &cc);
+            total_wt -= unit_propagate(g, &cc, total_wt - target);
         free(residual_wt);
 //        free(col_class);
     } else {
@@ -265,16 +265,16 @@ void expand(struct Graph *g, struct VtxList *C, struct UnweightedVtxList *P,
         if (bound <= incumbent->total_wt) return;
         break;
     case 1:
-        if (C->total_wt + colouring_bound(g, P, false, next_vtx_fun, false) <= incumbent->total_wt) return;
+        if (C->total_wt + colouring_bound(g, P, false, next_vtx_fun, false, incumbent->total_wt - C->total_wt) <= incumbent->total_wt) return;
         break;
     case 2:
-        if (C->total_wt + colouring_bound(g, P, true, next_vtx_fun, false) <= incumbent->total_wt) return;
-        if (C->total_wt + colouring_bound(g, P, true, next_vtx_fun, true) <= incumbent->total_wt) return;
+        if (C->total_wt + colouring_bound(g, P, true, next_vtx_fun, false, incumbent->total_wt - C->total_wt) <= incumbent->total_wt) return;
+        if (C->total_wt + colouring_bound(g, P, true, next_vtx_fun, true, incumbent->total_wt - C->total_wt) <= incumbent->total_wt) return;
         break;
     case 3:
-        if (C->total_wt + colouring_bound(g, P, false, next_vtx_fun, false) <= incumbent->total_wt) return;
-        if (C->total_wt + colouring_bound(g, P, true, next_vtx_fun, false) <= incumbent->total_wt) return;
-        if (C->total_wt + colouring_bound(g, P, true, next_vtx_fun, true) <= incumbent->total_wt) return;
+        if (C->total_wt + colouring_bound(g, P, false, next_vtx_fun, false, incumbent->total_wt - C->total_wt) <= incumbent->total_wt) return;
+        if (C->total_wt + colouring_bound(g, P, true, next_vtx_fun, false, incumbent->total_wt - C->total_wt) <= incumbent->total_wt) return;
+        if (C->total_wt + colouring_bound(g, P, true, next_vtx_fun, true, incumbent->total_wt - C->total_wt) <= incumbent->total_wt) return;
         break;
     }
     

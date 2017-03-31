@@ -109,7 +109,9 @@ void expand(struct Graph *g, struct VtxList *C, struct UnweightedVtxList *P,
 
     if (!quiet && P->size==0 && C->total_wt>incumbent->total_wt) {
         copy_VtxList(C, incumbent);
-        printf("New incumbent of weight %ld\n", incumbent->total_wt);
+        long elapsed_msec = get_elapsed_time_msec();
+        printf("New incumbent: weight %ld at time %ld ms after %ld expand calls\n",
+                incumbent->total_wt, elapsed_msec, *expand_call_count);
     }
 
     long *cumulative_wt_bound = malloc(g->n * sizeof *cumulative_wt_bound);

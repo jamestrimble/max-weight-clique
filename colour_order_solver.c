@@ -132,7 +132,7 @@ long unit_propagate(struct Graph *g, struct ListOfClauses *cc, long target_reduc
 
     long retval = 0;
 
-    while (true) {
+    while (retval < target_reduction) {
         init_stack_without_dups(&I);
         unit_propagate_once(g, cc, &cm, &I);
 
@@ -158,8 +158,6 @@ long unit_propagate(struct Graph *g, struct ListOfClauses *cc, long target_reduc
             cc->clause[max_idx].weight -= min_wt;  // decrease weight of last clause in set
             //printf("%ld\n", cc->clause[max_idx].weight);
             retval += min_wt;
-            if (retval >= target_reduction)
-                break;
         } else {
             break;
         }

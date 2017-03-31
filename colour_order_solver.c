@@ -227,8 +227,6 @@ void colouring_bound(struct Graph *g, struct UnweightedVtxList *P,
 //        long oldbound = bound;
 //        printf("%ld ", bound);
 
-        for (int i=0; i<P->size; i++)
-            residual_wt[P->vv[i]] = g->weight[P->vv[i]];
         P->size = 0;
         bound = 0;
         for (int i=0; i<cc.size; i++) {
@@ -239,7 +237,6 @@ void colouring_bound(struct Graph *g, struct UnweightedVtxList *P,
 //            printf("%ld\n", bound);
             for (int j=0; j<clause->vv_len; j++) {
                 int w = clause->vv[j];
-                residual_wt[w] -= clause->weight;
                 if (last_clause[w] == i) {
                     cumulative_wt_bound[P->size] = bound;
                     P->vv[P->size++] = w;

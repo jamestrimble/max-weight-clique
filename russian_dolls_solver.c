@@ -211,7 +211,7 @@ long colouring_bound(struct Graph *g, struct UnweightedVtxList *P, bool tavares_
             total_wt += class_min_wt;
             cc.size++;
         }
-        if (use_unitprop)
+        if (use_unitprop && total_wt > target)
             total_wt -= unit_propagate(g, &cc, total_wt - target);
         free(residual_wt);
 //        free(col_class);
@@ -268,12 +268,12 @@ void expand(struct Graph *g, struct VtxList *C, struct UnweightedVtxList *P,
         if (C->total_wt + colouring_bound(g, P, false, next_vtx_fun, false, incumbent->total_wt - C->total_wt) <= incumbent->total_wt) return;
         break;
     case 2:
-        if (C->total_wt + colouring_bound(g, P, true, next_vtx_fun, false, incumbent->total_wt - C->total_wt) <= incumbent->total_wt) return;
+        //if (C->total_wt + colouring_bound(g, P, true, next_vtx_fun, false, incumbent->total_wt - C->total_wt) <= incumbent->total_wt) return;
         if (C->total_wt + colouring_bound(g, P, true, next_vtx_fun, true, incumbent->total_wt - C->total_wt) <= incumbent->total_wt) return;
         break;
     case 3:
         if (C->total_wt + colouring_bound(g, P, false, next_vtx_fun, false, incumbent->total_wt - C->total_wt) <= incumbent->total_wt) return;
-        if (C->total_wt + colouring_bound(g, P, true, next_vtx_fun, false, incumbent->total_wt - C->total_wt) <= incumbent->total_wt) return;
+        //if (C->total_wt + colouring_bound(g, P, true, next_vtx_fun, false, incumbent->total_wt - C->total_wt) <= incumbent->total_wt) return;
         if (C->total_wt + colouring_bound(g, P, true, next_vtx_fun, true, incumbent->total_wt - C->total_wt) <= incumbent->total_wt) return;
         break;
     }

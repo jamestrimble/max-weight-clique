@@ -41,20 +41,19 @@ void colouring_bound(struct Graph *g, struct UnweightedVtxList *P,
 
         P->size = 0;
 
-        while ((v=last_set_bit(to_colour, numwords))!=-1) {
-            numwords = v/BITS_PER_WORD+1;
+        while ((v=first_set_bit(to_colour, numwords))!=-1) {
             copy_bitset(to_colour, candidates, numwords);
             long class_min_wt = residual_wt[v];
             unset_bit(to_colour, v);
             int col_class_size = 1;
             col_class[0] = v;
             bitset_intersect_with(candidates, g->bit_complement_nd[v], numwords);
-            while ((v=last_set_bit(candidates, v/BITS_PER_WORD+1))!=-1) {
+            while ((v=first_set_bit(candidates, numwords))!=-1) {
                 if (residual_wt[v] < class_min_wt)
                     class_min_wt = residual_wt[v];
                 unset_bit(to_colour, v);
                 col_class[col_class_size++] = v;
-                bitset_intersect_with(candidates, g->bit_complement_nd[v], v/BITS_PER_WORD+1);
+                bitset_intersect_with(candidates, g->bit_complement_nd[v], numwords);
             }
             bound += class_min_wt;
             for (int i=0; i<col_class_size; i++) {
@@ -74,19 +73,18 @@ void colouring_bound(struct Graph *g, struct UnweightedVtxList *P,
         P->size = 0;
         int j = 0;
 
-        while ((v=last_set_bit(to_colour, numwords))!=-1) {
-            numwords = v/BITS_PER_WORD+1;
+        while ((v=first_set_bit(to_colour, numwords))!=-1) {
             copy_bitset(to_colour, candidates, numwords);
             long class_max_wt = g->weight[v];
             unset_bit(to_colour, v);
             P->vv[P->size++] = v;
             bitset_intersect_with(candidates, g->bit_complement_nd[v], numwords);
-            while ((v=last_set_bit(candidates, v/BITS_PER_WORD+1))!=-1) {
+            while ((v=first_set_bit(candidates, numwords))!=-1) {
                 if (g->weight[v] > class_max_wt)
                     class_max_wt = g->weight[v];
                 unset_bit(to_colour, v);
                 P->vv[P->size++] = v;
-                bitset_intersect_with(candidates, g->bit_complement_nd[v], v/BITS_PER_WORD+1);
+                bitset_intersect_with(candidates, g->bit_complement_nd[v], numwords);
             }
             bound += class_max_wt;
             for (int k=j; k<P->size; k++)

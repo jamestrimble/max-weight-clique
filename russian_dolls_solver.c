@@ -21,7 +21,7 @@ bool can_prune_by_colouring(struct Graph *g, struct UnweightedVtxList *P, bool t
     unsigned long long *to_colour = calloc((g->n+BITS_PER_WORD-1)/BITS_PER_WORD, sizeof *to_colour);
     unsigned long long *candidates = malloc((g->n+BITS_PER_WORD-1)/BITS_PER_WORD * sizeof *candidates);
 
-    if (P->size==0) return 0;
+    if (P->size==0) return K >= 0;
 
     int max_v = P->vv[P->size-1];
     int numwords = max_v/BITS_PER_WORD+1;

@@ -15,8 +15,8 @@
 #include <string.h>
 
 // Returns an upper bound on weight from the vertices in P
-long colouring_bound(struct Graph *g, struct UnweightedVtxList *P, bool tavares_style,
-        int (*next_vtx_fun)(unsigned long long *, int))
+long can_prune_by_colouring(struct Graph *g, struct UnweightedVtxList *P, bool tavares_style,
+        int (*next_vtx_fun)(unsigned long long *, int), long K)
 {
     unsigned long long *to_colour = calloc((g->n+BITS_PER_WORD-1)/BITS_PER_WORD, sizeof *to_colour);
     unsigned long long *candidates = malloc((g->n+BITS_PER_WORD-1)/BITS_PER_WORD * sizeof *candidates);
@@ -30,7 +30,6 @@ long colouring_bound(struct Graph *g, struct UnweightedVtxList *P, bool tavares_
         set_bit(to_colour, P->vv[i]);
 
     int v;
-    long total_wt = 0;
 
     if (tavares_style) {
         int *col_class = malloc(g->n * sizeof *col_class);
@@ -60,7 +59,8 @@ long colouring_bound(struct Graph *g, struct UnweightedVtxList *P, bool tavares_
                 residual_wt[w] -= class_min_wt;
                 if (residual_wt[w] > 0) set_bit(to_colour, w);
             }
-            total_wt += class_min_wt;
+            K -= class_min_wt;
+            if (K < 0) break;
         }
         free(residual_wt);
         free(col_class);
@@ -68,22 +68,23 @@ long colouring_bound(struct Graph *g, struct UnweightedVtxList *P, bool tavares_
         while ((v=next_vtx_fun(to_colour, numwords))!=-1) {
             copy_bitset(to_colour, candidates, numwords);
             long class_max_wt = g->weight[v];
-            total_wt += g->weight[v];
+            K -= g->weight[v];
             unset_bit(to_colour, v);
             bitset_intersect_with(candidates, g->bit_complement_nd[v], numwords);
             while ((v=next_vtx_fun(candidates, numwords))!=-1) {
                 if (g->weight[v] > class_max_wt) {
-                    total_wt = total_wt - class_max_wt + g->weight[v];
+                    K = K + class_max_wt - g->weight[v];
                     class_max_wt = g->weight[v];
                 }
                 unset_bit(to_colour, v);
                 bitset_intersect_with(candidates, g->bit_complement_nd[v], numwords);
             }
+            if (K < 0) break;
         }
     }
     free(to_colour);
     free(candidates);
-    return total_wt;
+    return K >= 0;
 }
 
 long vertex_weight_sum(struct Graph *g, struct UnweightedVtxList *P)
@@ -114,14 +115,14 @@ void expand(struct Graph *g, struct VtxList *C, struct UnweightedVtxList *P,
         if (bound <= incumbent->total_wt) return;
         break;
     case 1:
-        if (C->total_wt + colouring_bound(g, P, false, next_vtx_fun) <= incumbent->total_wt) return;
+        if (can_prune_by_colouring(g, P, false, next_vtx_fun, incumbent->total_wt-C->total_wt)) return;
         break;
     case 2:
-        if (C->total_wt + colouring_bound(g, P, true, next_vtx_fun) <= incumbent->total_wt) return;
+        if (can_prune_by_colouring(g, P, true, next_vtx_fun, incumbent->total_wt-C->total_wt)) return;
         break;
     case 3:
-        if (C->total_wt + colouring_bound(g, P, false, next_vtx_fun) <= incumbent->total_wt) return;
-        if (C->total_wt + colouring_bound(g, P, true, next_vtx_fun) <= incumbent->total_wt) return;
+        if (can_prune_by_colouring(g, P, false, next_vtx_fun, incumbent->total_wt-C->total_wt)) return;
+        if (can_prune_by_colouring(g, P, true, next_vtx_fun, incumbent->total_wt-C->total_wt)) return;
         break;
     }
     

@@ -22,7 +22,7 @@ int get_unique_remaining_vtx(struct Clause *c, int *reason) {
             return v;
     }
 
-    fail("Shouldn't have reache30 here in get_unique_remaining_vtx");
+//    fail("Shouldn't have reache30 here in get_unique_remaining_vtx");
     return -1;
 }
 
@@ -56,7 +56,7 @@ void unit_propagate_once(struct Graph *g, struct ListOfClauses *cc,
     fast_init_stack_without_dups(&S, cc->size);
     for (int i=0; i<cc->size; i++) {
         struct Clause *clause = &cc->clause[i];
-        if (!clause->used) {
+        if (clause->remaining_wt) {
             clause->remaining_vv_count = clause->vv_len;
             if (clause->vv_len==1) {
                 push_without_dups(&S, i);
@@ -123,7 +123,7 @@ long unit_propagate(struct Graph *g, struct ListOfClauses *cc, long target_reduc
         }
     }
     for (int i=0; i<cc->size; i++)
-        cc->clause[i].used = false;
+        cc->clause[i].remaining_wt = cc->clause[i].weight;
 
     struct IntStackWithoutDups I;
 
@@ -138,16 +138,21 @@ long unit_propagate(struct Graph *g, struct ListOfClauses *cc, long target_reduc
             int max_idx = -1;
             for (int i=0; i<I.size; i++) {
                 int c_idx = I.vals[i];
-                cc->clause[c_idx].used = true;
-                long wt = cc->clause[c_idx].weight;
+                long wt = cc->clause[c_idx].remaining_wt;
                 if (wt < min_wt)
                     min_wt = wt;
                 if (c_idx > max_idx)
                     max_idx = c_idx;
-                // Remove references to this clause from CM
-                for (int j=0; j<cc->clause[c_idx].vv_len; j++) {
-                    int v = cc->clause[c_idx].vv[j];
-                    remove_clause_membership(&cm, v, c_idx);
+            }
+            for (int i=0; i<I.size; i++) {
+                int c_idx = I.vals[i];
+                cc->clause[c_idx].remaining_wt -= min_wt;
+                if (cc->clause[c_idx].remaining_wt == 0) {
+                    // Remove references to this clause from CM
+                    for (int j=0; j<cc->clause[c_idx].vv_len; j++) {
+                        int v = cc->clause[c_idx].vv[j];
+                        remove_clause_membership(&cm, v, c_idx);
+                    }
                 }
             }
             //printf("%d\n", max_idx);

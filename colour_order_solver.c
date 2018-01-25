@@ -68,8 +68,11 @@ void unit_propagate_once(struct Graph *g, struct ListOfClauses *cc,
 
     // each vertex has a clause index as its reason, or -1
     int reason[BIGNUM];
-    for (int i=0; i<g->n; i++)
+    bool vertex_has_been_propagated[BIGNUM];
+    for (int i=0; i<g->n; i++) {
         reason[i] = -1;
+        vertex_has_been_propagated[i] = false;
+    }
 
     while (S.size) {
         //printf("S.size %d\n", S.size);
@@ -78,26 +81,32 @@ void unit_propagate_once(struct Graph *g, struct ListOfClauses *cc,
 //        if (u->remaining_vv_count != 1)
 //            fail("Unexpected remaining_vv_count");
         int v = get_unique_remaining_vtx(u, reason);
-        //TODO: think about the next commented-out line. Should it be included???
-        //reason[v] = u_idx;
-        for (int i=0; i<g->nonadjlist_len[v]; i++) {
-            int w = g->nonadjlist[v][i];
-            if (reason[w] == -1) {
-                reason[w] = u_idx;
-                for (int j=cm->list_len[w]; j--; ) {
-                    int c_idx = cm->list[w][j];
-                    struct Clause *c = &cc->clause[c_idx];
-                    c->remaining_vv_count--;
-                    if (c->remaining_vv_count==1) {
-                        push_without_dups(&S, c_idx);
-                    } else if (c->remaining_vv_count==0) {
-                        create_inconsistent_set(I, c_idx, cc, reason);
-                        return;
+        if (!vertex_has_been_propagated[v]) {
+//            printf("%d ", v);
+            //TODO: think about the next commented-out line. Should it be included???
+            //reason[v] = u_idx;
+            for (int i=0; i<g->nonadjlist_len[v]; i++) {
+                int w = g->nonadjlist[v][i];
+                if (reason[w] == -1) {
+                    reason[w] = u_idx;
+                    for (int j=cm->list_len[w]; j--; ) {
+                        int c_idx = cm->list[w][j];
+                        struct Clause *c = &cc->clause[c_idx];
+                        c->remaining_vv_count--;
+                        if (c->remaining_vv_count==1) {
+                            push_without_dups(&S, c_idx);
+                        } else if (c->remaining_vv_count==0) {
+                            create_inconsistent_set(I, c_idx, cc, reason);
+//                            printf("\n");
+                            return;
+                        }
                     }
                 }
             }
         }
+        vertex_has_been_propagated[v] = true;
     }
+//    printf("\n");
 }
 
 void remove_clause_membership(struct ClauseMembership *cm, int v, int clause_idx)
@@ -166,6 +175,7 @@ long unit_propagate(struct Graph *g, struct ListOfClauses *cc, long target_reduc
     }
     return retval;
 }
+
 void colouring_bound(struct Graph *g, struct UnweightedVtxList *P,
         long *cumulative_wt_bound, bool tavares_style, long target)
 {

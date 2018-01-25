@@ -26,6 +26,29 @@ int get_unique_remaining_vtx(struct Clause *c, int *reason) {
     return -1;
 }
 
+void create_inconsistent_set(struct IntStackWithoutDups *I, int c_idx,
+        struct ListOfClauses *cc, int *reason)
+{
+    struct IntQueue Q;
+    init_queue(&Q);
+    enqueue(&Q, c_idx);
+    push_without_dups(I, c_idx);
+    while(!queue_empty(&Q)) {
+        int d_idx = dequeue(&Q);
+        struct Clause *d = &cc->clause[d_idx];
+        for (int k=0; k<d->vv_len; k++) {
+            int t = d->vv[k];
+            int r = reason[t];
+            if (r != -1) {  // " removed literal l' "
+                if (!I->on_stack[r]) {
+                    enqueue(&Q, r);
+                    push_without_dups(I, r);
+                }
+            }
+        }
+    }
+}
+
 void unit_propagate_once(struct Graph *g, struct ListOfClauses *cc,
         struct ClauseMembership *cm, struct IntStackWithoutDups *I)
 {
@@ -52,8 +75,8 @@ void unit_propagate_once(struct Graph *g, struct ListOfClauses *cc,
         //printf("S.size %d\n", S.size);
         int u_idx = pop_without_dups(&S);
         struct Clause *u = &cc->clause[u_idx];
-        if (u->remaining_vv_count != 1)
-            fail("Unexpected remaining_vv_count");
+//        if (u->remaining_vv_count != 1)
+//            fail("Unexpected remaining_vv_count");
         int v = get_unique_remaining_vtx(u, reason);
         //TODO: think about the next commented-out line. Should it be included???
         //reason[v] = u_idx;
@@ -61,32 +84,14 @@ void unit_propagate_once(struct Graph *g, struct ListOfClauses *cc,
             int w = g->nonadjlist[v][i];
             if (reason[w] == -1) {
                 reason[w] = u_idx;
-                for (int j=0; j<cm->list_len[w]; j++) {
+                for (int j=cm->list_len[w]; j--; ) {
                     int c_idx = cm->list[w][j];
                     struct Clause *c = &cc->clause[c_idx];
                     c->remaining_vv_count--;
                     if (c->remaining_vv_count==1) {
                         push_without_dups(&S, c_idx);
                     } else if (c->remaining_vv_count==0) {
-                        //printf("yay!\n");
-                        struct IntQueue Q;
-                        init_queue(&Q);
-                        enqueue(&Q, c_idx);
-                        push_without_dups(I, c_idx);
-                        while(!queue_empty(&Q)) {
-                            int d_idx = dequeue(&Q);
-                            struct Clause *d = &cc->clause[d_idx];
-                            for (int k=0; k<d->vv_len; k++) {
-                                int t = d->vv[k];
-                                int r = reason[t];
-                                if (r != -1) {  // " removed literal l' "
-                                    if (!I->on_stack[r]) {
-                                        enqueue(&Q, r);
-                                        push_without_dups(I, r);
-                                    }
-                                }
-                            }
-                        }
+                        create_inconsistent_set(I, c_idx, cc, reason);
                         return;
                     }
                 }
@@ -97,20 +102,13 @@ void unit_propagate_once(struct Graph *g, struct ListOfClauses *cc,
 
 void remove_clause_membership(struct ClauseMembership *cm, int v, int clause_idx)
 {
-    // TODO: make this more efficient when you're sure it works
-    int pos = -1;
     for (int i=0; i<cm->list_len[v]; i++) {
         if (cm->list[v][i] == clause_idx) {
-            pos = i;
-            break;
+            cm->list[v][i] = cm->list[v][cm->list_len[v]-1];
+            cm->list_len[v]--;
+            return;
         }
     }
-    if (pos==-1)
-        fail("Couldn't find clause in membership list");
-    int tmp = cm->list[v][cm->list_len[v]-1];
-    cm->list[v][cm->list_len[v]-1] = cm->list[v][pos];
-    cm->list[v][pos] = tmp;
-    cm->list_len[v]--;
 }
 
 long unit_propagate(struct Graph *g, struct ListOfClauses *cc, long target_reduction)

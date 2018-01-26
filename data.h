@@ -51,8 +51,6 @@ struct Clause {
     int vv_len;
     int remaining_vv_count;
     long remaining_wt;
-    // TODO: remove used member
-    bool used;    // has it been used in an inconsistent subset?
 };
 
 

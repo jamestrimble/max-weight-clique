@@ -29,6 +29,7 @@ void push_without_dups(struct IntStackWithoutDups *s, int val);
 
 int pop_without_dups(struct IntStackWithoutDups *s);
 
+void clear_stack_without_dups(struct IntStackWithoutDups *s);
 
 struct IntQueue {
     int start;

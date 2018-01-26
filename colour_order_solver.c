@@ -109,6 +109,64 @@ void unit_propagate_once(struct Graph *g, struct ListOfClauses *cc,
 //    printf("\n");
 }
 
+void remove_from_clause_membership(int v, int clause_idx, struct ClauseMembership *cm)
+{
+    for (int i=0; i<cm->list_len[v]; i++) {
+        if (cm->list[v][i] == clause_idx) {
+            cm->list[v][i] = cm->list[v][cm->list_len[v]-1];
+            cm->list[v][cm->list_len[v]-1] = clause_idx;
+            cm->list_len[v]--;
+            return;
+        }
+    }
+    fail("fell off the end of remove_from_clause_membership\n");
+}
+
+void fake_length_one_clause(struct Clause *clause, int clause_idx, int vtx_pos,
+        struct ClauseMembership *cm) {
+    int tmp = clause->vv[vtx_pos];
+    clause->vv[vtx_pos] = clause->vv[0];
+    clause->vv[0] = tmp;
+    for (int i=1; i<clause->vv_len; i++) {
+        int v = clause->vv[i];
+        remove_from_clause_membership(v, clause_idx, cm);
+    }
+    clause->vv_len = 1;
+}
+
+void unfake_length_one_clause(struct Clause *clause, int clause_idx, int clause_len,
+        struct ClauseMembership *cm) {
+    clause->vv_len = clause_len;
+    for (int i=1; i<clause_len; i++) {
+        int v = clause->vv[i];
+        cm->list[v][cm->list_len[v]++] = clause_idx;
+    }
+}
+
+bool look_for_iset_using_non_unit_clause(
+        struct Graph *g,
+        struct Clause *clause,
+        int clause_idx,
+        struct ListOfClauses *cc,
+        struct ClauseMembership *cm,
+        struct IntStackWithoutDups *I,
+        struct IntStackWithoutDups *iset)
+{
+    clear_stack_without_dups(iset);
+    int clause_len = clause->vv_len;
+    for (int z=0; z<clause_len; z++) {
+        clear_stack_without_dups(I);
+        fake_length_one_clause(clause, clause_idx, z, cm);
+        unit_propagate_once(g, cc, cm, I);
+        unfake_length_one_clause(clause, clause_idx, clause_len, cm);
+        if (I->size==0)
+            return false;
+        for (int i=0; i<I->size; i++)
+            push_without_dups(iset, I->vals[i]);
+    }
+    return true;
+}
+
 void remove_clause_membership(struct ClauseMembership *cm, int v, int clause_idx)
 {
     for (int i=0; i<cm->list_len[v]; i++) {
@@ -168,11 +226,15 @@ long unit_propagate(struct Graph *g, struct ListOfClauses *cc, long target_reduc
         cc->clause[i].remaining_wt = cc->clause[i].weight;
 
     struct IntStackWithoutDups I;
+    fast_init_stack_without_dups(&I, cc->size);
 
     long improvement = 0;
 
-    while (improvement < target_reduction) {
-        fast_init_stack_without_dups(&I, cc->size);
+    for (;;) {
+        if (improvement >= target_reduction)
+            return improvement;
+
+        clear_stack_without_dups(&I);
         unit_propagate_once(g, cc, &cm, &I);
 
         if (I.size==0)
@@ -180,6 +242,38 @@ long unit_propagate(struct Graph *g, struct ListOfClauses *cc, long target_reduc
 
         improvement += process_inconsistent_set(&I, cc, &cm);
     }
+
+//    for (int i=0; i<cc->size; i++) {
+//        struct Clause *clause = &cc->clause[i];
+//        printf("%ld ", clause->remaining_wt);
+//    }
+//    printf("\n");
+//    printf("\n");
+//
+    struct IntStackWithoutDups iset;
+    fast_init_stack_without_dups(&iset, cc->size);
+    for (int i=0; i<cc->size; i++) {
+        struct Clause *clause = &cc->clause[i];
+        for (;;) {
+            if (improvement >= target_reduction)
+                return improvement;
+
+            if (clause->vv_len == 1)
+                break;
+
+            if (clause->remaining_wt == 0)
+                break;
+
+            bool found_iset = look_for_iset_using_non_unit_clause(
+                    g, clause, i, cc, &cm, &I, &iset);
+
+            if (!found_iset)
+                break;
+
+            improvement += process_inconsistent_set(&iset, cc, &cm);
+        }
+    }
+
     return improvement;
 }
 

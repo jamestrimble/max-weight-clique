@@ -55,6 +55,12 @@ int pop_without_dups(struct IntStackWithoutDups *s)
     return val;
 }
 
+void clear_stack_without_dups(struct IntStackWithoutDups *s)
+{
+    for (int i=0; i<s->size; i++)
+        s->on_stack[s->vals[i]] = false;
+    s->size = 0;
+}
 
 void init_queue(struct IntQueue *q)
 {

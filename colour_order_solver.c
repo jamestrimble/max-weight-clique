@@ -52,14 +52,14 @@ void create_inconsistent_set(struct IntStackWithoutDups *I, int c_idx,
 void unit_propagate_once(struct Graph *g, struct ListOfClauses *cc,
         struct ClauseMembership *cm, struct IntStackWithoutDups *I)
 {
-    struct IntStackWithoutDups S;   // TODO: probably wouldn't have dups anyway?
-    fast_init_stack_without_dups(&S, cc->size);
+    struct IntStack S;   // TODO: probably wouldn't have dups anyway?
+    init_stack(&S);
     for (int i=0; i<cc->size; i++) {
         struct Clause *clause = &cc->clause[i];
         if (clause->remaining_wt) {
             clause->remaining_vv_count = clause->vv_len;
             if (clause->vv_len==1) {
-                push_without_dups(&S, i);
+                push(&S, i);
             }
         }
     }
@@ -76,7 +76,7 @@ void unit_propagate_once(struct Graph *g, struct ListOfClauses *cc,
 
     while (S.size) {
         //printf("S.size %d\n", S.size);
-        int u_idx = pop_without_dups(&S);
+        int u_idx = pop(&S);
         struct Clause *u = &cc->clause[u_idx];
 //        if (u->remaining_vv_count != 1)
 //            fail("Unexpected remaining_vv_count");
@@ -94,7 +94,7 @@ void unit_propagate_once(struct Graph *g, struct ListOfClauses *cc,
                         struct Clause *c = &cc->clause[c_idx];
                         c->remaining_vv_count--;
                         if (c->remaining_vv_count==1) {
-                            push_without_dups(&S, c_idx);
+                            push(&S, c_idx);
                         } else if (c->remaining_vv_count==0) {
                             create_inconsistent_set(I, c_idx, cc, reason);
 //                            printf("\n");

@@ -52,7 +52,7 @@ void create_inconsistent_set(struct IntStackWithoutDups *I, int c_idx,
 void unit_propagate_once(struct Graph *g, struct ListOfClauses *cc,
         struct ClauseMembership *cm, struct IntStackWithoutDups *I)
 {
-    struct IntStack S;   // TODO: probably wouldn't have dups anyway?
+    struct IntStack S;
     init_stack(&S);
     for (int i=0; i<cc->size; i++) {
         struct Clause *clause = &cc->clause[i];

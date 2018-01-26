@@ -210,19 +210,20 @@ void colouring_bound(struct Graph *g, struct UnweightedVtxList *P,
             copy_bitset(to_colour, candidates, numwords);
             long class_min_wt = residual_wt[v];
             unset_bit(to_colour, v);
-            cc.clause[cc.size].vv_len = 1;
-            cc.clause[cc.size].vv[0] = v;
+            struct Clause *clause = &cc.clause[cc.size];
+            clause->vv_len = 1;
+            clause->vv[0] = v;
             bitset_intersect_with(candidates, g->bit_complement_nd[v], numwords);
             while ((v=last_set_bit(candidates, v/BITS_PER_WORD+1))!=-1) {
                 if (residual_wt[v] < class_min_wt)
                     class_min_wt = residual_wt[v];
                 unset_bit(to_colour, v);
-                cc.clause[cc.size].vv[cc.clause[cc.size].vv_len++] = v;
+                clause->vv[clause->vv_len++] = v;
                 bitset_intersect_with(candidates, g->bit_complement_nd[v], v/BITS_PER_WORD+1);
             }
 //            printf("%ld\n", class_min_wt);
-            for (int i=0; i<cc.clause[cc.size].vv_len; i++) {
-                int w = cc.clause[cc.size].vv[i];
+            for (int i=0; i<clause->vv_len; i++) {
+                int w = clause->vv[i];
                 residual_wt[w] -= class_min_wt;
                 if (residual_wt[w] > 0) {
                     set_bit(to_colour, w);
@@ -231,7 +232,7 @@ void colouring_bound(struct Graph *g, struct UnweightedVtxList *P,
                 }
             }
             bound += class_min_wt;
-            cc.clause[cc.size].weight = class_min_wt;
+            clause->weight = class_min_wt;
             cc.size++;
         }
         if (bound > target)

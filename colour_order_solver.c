@@ -120,6 +120,39 @@ void remove_clause_membership(struct ClauseMembership *cm, int v, int clause_idx
     }
 }
 
+long process_inconsistent_set(
+        struct IntStackWithoutDups *iset,
+        struct ListOfClauses *cc,
+        struct ClauseMembership *cm)
+{
+    if (iset->size == 0)
+        return 0;
+
+    long min_wt = LONG_MAX;
+    int max_idx = -1;
+    for (int i=0; i<iset->size; i++) {
+        int c_idx = iset->vals[i];
+        long wt = cc->clause[c_idx].remaining_wt;
+        if (wt < min_wt)
+            min_wt = wt;
+        if (c_idx > max_idx)
+            max_idx = c_idx;
+    }
+    for (int i=0; i<iset->size; i++) {
+        int c_idx = iset->vals[i];
+        cc->clause[c_idx].remaining_wt -= min_wt;
+        if (cc->clause[c_idx].remaining_wt == 0) {
+            // Remove references to this clause from CM
+            for (int j=0; j<cc->clause[c_idx].vv_len; j++) {
+                int v = cc->clause[c_idx].vv[j];
+                remove_clause_membership(cm, v, c_idx);
+            }
+        }
+    }
+    cc->clause[max_idx].weight -= min_wt;  // decrease weight of last clause in set
+    return min_wt;
+}
+
 long unit_propagate(struct Graph *g, struct ListOfClauses *cc, long target_reduction)
 {
     static struct ClauseMembership cm;
@@ -136,44 +169,18 @@ long unit_propagate(struct Graph *g, struct ListOfClauses *cc, long target_reduc
 
     struct IntStackWithoutDups I;
 
-    long retval = 0;
+    long improvement = 0;
 
-    while (retval < target_reduction) {
+    while (improvement < target_reduction) {
         fast_init_stack_without_dups(&I, cc->size);
         unit_propagate_once(g, cc, &cm, &I);
 
-        if (I.size>0) {
-            long min_wt = LONG_MAX;
-            int max_idx = -1;
-            for (int i=0; i<I.size; i++) {
-                int c_idx = I.vals[i];
-                long wt = cc->clause[c_idx].remaining_wt;
-                if (wt < min_wt)
-                    min_wt = wt;
-                if (c_idx > max_idx)
-                    max_idx = c_idx;
-            }
-            for (int i=0; i<I.size; i++) {
-                int c_idx = I.vals[i];
-                cc->clause[c_idx].remaining_wt -= min_wt;
-                if (cc->clause[c_idx].remaining_wt == 0) {
-                    // Remove references to this clause from CM
-                    for (int j=0; j<cc->clause[c_idx].vv_len; j++) {
-                        int v = cc->clause[c_idx].vv[j];
-                        remove_clause_membership(&cm, v, c_idx);
-                    }
-                }
-            }
-            //printf("%d\n", max_idx);
-            //printf("%ld ", cc->clause[max_idx].weight);
-            cc->clause[max_idx].weight -= min_wt;  // decrease weight of last clause in set
-            //printf("%ld\n", cc->clause[max_idx].weight);
-            retval += min_wt;
-        } else {
+        if (I.size==0)
             break;
-        }
+
+        improvement += process_inconsistent_set(&I, cc, &cm);
     }
-    return retval;
+    return improvement;
 }
 
 void colouring_bound(struct Graph *g, struct UnweightedVtxList *P,

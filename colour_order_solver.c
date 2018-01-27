@@ -213,6 +213,9 @@ long process_inconsistent_set(
 
 long unit_propagate(struct Graph *g, struct ListOfClauses *cc, long target_reduction)
 {
+    if (target_reduction <= 0)
+        return 0;
+
     static struct ClauseMembership cm;
     fast_ClauseMembership_init(&cm, g->n);
     for (int i=0; i<cc->size; i++) {
@@ -231,9 +234,6 @@ long unit_propagate(struct Graph *g, struct ListOfClauses *cc, long target_reduc
     long improvement = 0;
 
     for (;;) {
-        if (improvement >= target_reduction)
-            return improvement;
-
         clear_stack_without_dups(&I);
         unit_propagate_once(g, cc, &cm, &I);
 
@@ -241,6 +241,9 @@ long unit_propagate(struct Graph *g, struct ListOfClauses *cc, long target_reduc
             break;
 
         improvement += process_inconsistent_set(&I, cc, &cm);
+
+        if (improvement >= target_reduction)
+            return improvement;
     }
 
 //    for (int i=0; i<cc->size; i++) {
@@ -255,9 +258,6 @@ long unit_propagate(struct Graph *g, struct ListOfClauses *cc, long target_reduc
     for (int i=0; i<cc->size; i++) {
         struct Clause *clause = &cc->clause[i];
         for (;;) {
-            if (improvement >= target_reduction)
-                return improvement;
-
             if (clause->vv_len == 1)
                 break;
 
@@ -271,13 +271,16 @@ long unit_propagate(struct Graph *g, struct ListOfClauses *cc, long target_reduc
                 break;
 
             improvement += process_inconsistent_set(&iset, cc, &cm);
+
+            if (improvement >= target_reduction)
+                return improvement;
         }
     }
 
     return improvement;
 }
 
-void colouring_bound(struct Graph *g, struct UnweightedVtxList *P,
+bool colouring_bound(struct Graph *g, struct UnweightedVtxList *P,
         long *cumulative_wt_bound, long target)
 {
     unsigned long long *to_colour = calloc((g->n+BITS_PER_WORD-1)/BITS_PER_WORD, sizeof *to_colour);
@@ -334,33 +337,35 @@ void colouring_bound(struct Graph *g, struct UnweightedVtxList *P,
         clause->weight = class_min_wt;
         cc.size++;
     }
-    if (bound > target)
-        unit_propagate(g, &cc, bound-target);
 
-//        long oldbound = bound;
-//        printf("%ld ", bound);
+    long improvement = unit_propagate(g, &cc, bound-target);
 
-    P->size = 0;
-    bound = 0;
-    for (int i=0; i<cc.size; i++) {
-        struct Clause *clause = &cc.clause[i];
-        if (clause->weight < 0)
-            fail("Unexpectedly low clause weight");
-        bound += clause->weight;
-//            printf("%ld\n", bound);
-        for (int j=0; j<clause->vv_len; j++) {
-            int w = clause->vv[j];
-            if (last_clause[w] == i) {
-                cumulative_wt_bound[P->size] = bound;
-                P->vv[P->size++] = w;
+    bool proved_we_can_prune = bound-improvement <= target;
+
+    if (!proved_we_can_prune) {
+        P->size = 0;
+        bound = 0;
+        for (int i=0; i<cc.size; i++) {
+            struct Clause *clause = &cc.clause[i];
+            if (clause->weight < 0)
+                fail("Unexpectedly low clause weight");
+            bound += clause->weight;
+    //            printf("%ld\n", bound);
+            for (int j=0; j<clause->vv_len; j++) {
+                int w = clause->vv[j];
+                if (last_clause[w] == i) {
+                    cumulative_wt_bound[P->size] = bound;
+                    P->vv[P->size++] = w;
+                }
             }
         }
     }
-//        printf("%ld\n", oldbound-bound);
-    free(residual_wt);
 
+    free(residual_wt);
     free(to_colour);
     free(candidates);
+
+    return !proved_we_can_prune;
 }
 
 void expand(struct Graph *g, struct VtxList *C, struct UnweightedVtxList *P,
@@ -379,28 +384,30 @@ void expand(struct Graph *g, struct VtxList *C, struct UnweightedVtxList *P,
     }
 
     long *cumulative_wt_bound = malloc(g->n * sizeof *cumulative_wt_bound);
-    colouring_bound(g, P, cumulative_wt_bound, incumbent->total_wt - C->total_wt);
 
-    struct UnweightedVtxList new_P;
-    init_UnweightedVtxList(&new_P, g->n);
+    if (colouring_bound(g, P, cumulative_wt_bound, incumbent->total_wt - C->total_wt)) {
+        struct UnweightedVtxList new_P;
+        init_UnweightedVtxList(&new_P, g->n);
 
-    for (int i=P->size-1; i>=0 && C->total_wt+cumulative_wt_bound[i]>incumbent->total_wt; i--) {
-        int v = P->vv[i];
+        for (int i=P->size-1; i>=0 && C->total_wt+cumulative_wt_bound[i]>incumbent->total_wt; i--) {
+            int v = P->vv[i];
 
-        new_P.size = 0;
-        for (int j=0; j<i; j++) {
-            int w = P->vv[j];
-            if (g->adjmat[v][w]) {
-                new_P.vv[new_P.size++] = w;
+            new_P.size = 0;
+            for (int j=0; j<i; j++) {
+                int w = P->vv[j];
+                if (g->adjmat[v][w]) {
+                    new_P.vv[new_P.size++] = w;
+                }
             }
+
+            vtxlist_push_vtx(g, C, v);
+            expand(g, C, &new_P, incumbent, level+1, expand_call_count, quiet);
+            vtxlist_pop_vtx(g, C);
         }
 
-        vtxlist_push_vtx(g, C, v);
-        expand(g, C, &new_P, incumbent, level+1, expand_call_count, quiet);
-        vtxlist_pop_vtx(g, C);
+        destroy_UnweightedVtxList(&new_P);
     }
 
-    destroy_UnweightedVtxList(&new_P);
     free(cumulative_wt_bound);
 }
 

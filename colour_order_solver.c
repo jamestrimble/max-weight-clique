@@ -85,18 +85,20 @@ void unit_propagate_once(struct Graph *g, struct ListOfClauses *cc,
             //reason[v] = u_idx;
             for (int i=0; i<g->nonadjlist_len[v]; i++) {
                 int w = g->nonadjlist[v][i];
-                if (reason[w] == -1) {
-                    reason[w] = u_idx;
-                    for (int j=0; j<cm->list_len[w]; j++) {
-                        int c_idx = cm->list[w][j];
-                        struct Clause *c = &cc->clause[c_idx];
-                        c->remaining_vv_count--;
-                        if (c->remaining_vv_count==1) {
-                            push(&S, c_idx);
-                        } else if (c->remaining_vv_count==0) {
-                            create_inconsistent_set(I, c_idx, cc, reason);
-//                            printf("\n");
-                            return;
+                if (cm->list_len[w]) {
+                    if (reason[w] == -1) {
+                        reason[w] = u_idx;
+                        for (int j=0; j<cm->list_len[w]; j++) {
+                            int c_idx = cm->list[w][j];
+                            struct Clause *c = &cc->clause[c_idx];
+                            c->remaining_vv_count--;
+                            if (c->remaining_vv_count==1) {
+                                push(&S, c_idx);
+                            } else if (c->remaining_vv_count==0) {
+                                create_inconsistent_set(I, c_idx, cc, reason);
+    //                            printf("\n");
+                                return;
+                            }
                         }
                     }
                 }

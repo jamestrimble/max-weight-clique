@@ -56,11 +56,9 @@ void unit_propagate_once(struct Graph *g, struct ListOfClauses *cc,
     init_stack(&S);
     for (int i=0; i<cc->size; i++) {
         struct Clause *clause = &cc->clause[i];
-        if (clause->remaining_wt) {
-            clause->remaining_vv_count = clause->vv_len;
-            if (clause->vv_len==1) {
-                push(&S, i);
-            }
+        clause->remaining_vv_count = clause->vv_len;
+        if (clause->vv_len==1 && clause->remaining_wt) {
+            push(&S, i);
         }
     }
 //    INSERTION_SORT(int, S.vals, S.size,

@@ -17,7 +17,6 @@ static char doc[] = "Find a maximum clique in a graph in DIMACS format";
 static char args_doc[] = "FILENAME";
 static struct argp_option options[] = {
     {"quiet", 'q', 0, 0, "Quiet output"},
-    {"tavares-colour", 't', 0, 0, "Tavares-style colouring"},
     {"vtx-ordering", 'o', "ORDER", 0, vertex_order_help},
     {"time-limit", 'l', "LIMIT", 0, "Time limit in seconds"},
     { 0 }
@@ -25,7 +24,6 @@ static struct argp_option options[] = {
 
 static struct {
     bool quiet;
-    bool tavares_colour;
     int vtx_ordering;
     int time_limit;
     char *filename;
@@ -34,7 +32,6 @@ static struct {
 
 void set_default_arguments() {
     arguments.quiet = false;
-    arguments.tavares_colour = false;
     arguments.vtx_ordering = 0;
     arguments.time_limit = 0;
     arguments.filename = NULL;
@@ -45,9 +42,6 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state) {
     switch (key) {
         case 'q':
             arguments.quiet = true;
-            break;
-        case 't':
-            arguments.tavares_colour = true;
             break;
         case 'o':
             arguments.vtx_ordering = atoi(arg);
@@ -85,8 +79,7 @@ int main(int argc, char** argv) {
     long expand_call_count = 0;
     struct VtxList clq;
     init_VtxList(&clq, g->n);
-    mc(g, &expand_call_count, arguments.quiet,
-            arguments.tavares_colour, arguments.vtx_ordering, &clq);
+    mc(g, &expand_call_count, arguments.quiet, arguments.vtx_ordering, &clq);
     long elapsed_msec = get_elapsed_time_msec();
     if (is_timeout_flag_set()) {
         printf("TIMEOUT\n");

@@ -278,7 +278,7 @@ long unit_propagate(struct Graph *g, struct ListOfClauses *cc, long target_reduc
 }
 
 void colouring_bound(struct Graph *g, struct UnweightedVtxList *P,
-        long *cumulative_wt_bound, bool tavares_style, long target)
+        long *cumulative_wt_bound, long target)
 {
     unsigned long long *to_colour = calloc((g->n+BITS_PER_WORD-1)/BITS_PER_WORD, sizeof *to_colour);
     unsigned long long *candidates = malloc((g->n+BITS_PER_WORD-1)/BITS_PER_WORD * sizeof *candidates);
@@ -296,102 +296,76 @@ void colouring_bound(struct Graph *g, struct UnweightedVtxList *P,
     int v;
     long bound = 0;
 
-    if (tavares_style) {
-//        int *col_class = malloc(g->n * sizeof *col_class);
-        long *residual_wt = malloc(g->n * sizeof *residual_wt);
-        static struct ListOfClauses cc;
-        cc.size = 0;
-        for (int i=0; i<P->size; i++)
-            residual_wt[P->vv[i]] = g->weight[P->vv[i]];
+    long *residual_wt = malloc(g->n * sizeof *residual_wt);
+    static struct ListOfClauses cc;
+    cc.size = 0;
+    for (int i=0; i<P->size; i++)
+        residual_wt[P->vv[i]] = g->weight[P->vv[i]];
 
-        int last_clause[BIGNUM];  // last_clause[v] is the index of the last
-                                  // clause in which v appears
-        while ((v=first_set_bit(to_colour, numwords))!=-1) {
+    int last_clause[BIGNUM];  // last_clause[v] is the index of the last
+                              // clause in which v appears
+    while ((v=first_set_bit(to_colour, numwords))!=-1) {
 //            numwords = v/BITS_PER_WORD+1;
-            copy_bitset(to_colour, candidates, numwords);
-            long class_min_wt = residual_wt[v];
+        copy_bitset(to_colour, candidates, numwords);
+        long class_min_wt = residual_wt[v];
+        unset_bit(to_colour, v);
+        struct Clause *clause = &cc.clause[cc.size];
+        clause->vv_len = 1;
+        clause->vv[0] = v;
+        bitset_intersect_with(candidates, g->bit_complement_nd[v], numwords);
+        while ((v=first_set_bit(candidates, numwords))!=-1) {
+            if (residual_wt[v] < class_min_wt)
+                class_min_wt = residual_wt[v];
             unset_bit(to_colour, v);
-            struct Clause *clause = &cc.clause[cc.size];
-            clause->vv_len = 1;
-            clause->vv[0] = v;
+            clause->vv[clause->vv_len++] = v;
             bitset_intersect_with(candidates, g->bit_complement_nd[v], numwords);
-            while ((v=first_set_bit(candidates, numwords))!=-1) {
-                if (residual_wt[v] < class_min_wt)
-                    class_min_wt = residual_wt[v];
-                unset_bit(to_colour, v);
-                clause->vv[clause->vv_len++] = v;
-                bitset_intersect_with(candidates, g->bit_complement_nd[v], numwords);
-            }
-//            printf("%ld\n", class_min_wt);
-            for (int i=0; i<clause->vv_len; i++) {
-                int w = clause->vv[i];
-                residual_wt[w] -= class_min_wt;
-                if (residual_wt[w] > 0) {
-                    set_bit(to_colour, w);
-                } else {
-                    last_clause[w] = cc.size;
-                }
-            }
-            bound += class_min_wt;
-            clause->weight = class_min_wt;
-            cc.size++;
         }
-        if (bound > target)
-            unit_propagate(g, &cc, bound-target);
+//            printf("%ld\n", class_min_wt);
+        for (int i=0; i<clause->vv_len; i++) {
+            int w = clause->vv[i];
+            residual_wt[w] -= class_min_wt;
+            if (residual_wt[w] > 0) {
+                set_bit(to_colour, w);
+            } else {
+                last_clause[w] = cc.size;
+            }
+        }
+        bound += class_min_wt;
+        clause->weight = class_min_wt;
+        cc.size++;
+    }
+    if (bound > target)
+        unit_propagate(g, &cc, bound-target);
 
 //        long oldbound = bound;
 //        printf("%ld ", bound);
 
-        P->size = 0;
-        bound = 0;
-        for (int i=0; i<cc.size; i++) {
-            struct Clause *clause = &cc.clause[i];
-            if (clause->weight < 0)
-                fail("Unexpectedly low clause weight");
-            bound += clause->weight;
+    P->size = 0;
+    bound = 0;
+    for (int i=0; i<cc.size; i++) {
+        struct Clause *clause = &cc.clause[i];
+        if (clause->weight < 0)
+            fail("Unexpectedly low clause weight");
+        bound += clause->weight;
 //            printf("%ld\n", bound);
-            for (int j=0; j<clause->vv_len; j++) {
-                int w = clause->vv[j];
-                if (last_clause[w] == i) {
-                    cumulative_wt_bound[P->size] = bound;
-                    P->vv[P->size++] = w;
-                }
+        for (int j=0; j<clause->vv_len; j++) {
+            int w = clause->vv[j];
+            if (last_clause[w] == i) {
+                cumulative_wt_bound[P->size] = bound;
+                P->vv[P->size++] = w;
             }
-        }
-//        printf("%ld\n", oldbound-bound);
-        free(residual_wt);
-//        free(col_class);
-    } else {
-        P->size = 0;
-        int j = 0;
-
-        while ((v=first_set_bit(to_colour, numwords))!=-1) {
-//            numwords = v/BITS_PER_WORD+1;
-            copy_bitset(to_colour, candidates, numwords);
-            long class_max_wt = g->weight[v];
-            unset_bit(to_colour, v);
-            P->vv[P->size++] = v;
-            bitset_intersect_with(candidates, g->bit_complement_nd[v], numwords);
-            while ((v=first_set_bit(candidates, numwords))!=-1) {
-                if (g->weight[v] > class_max_wt)
-                    class_max_wt = g->weight[v];
-                unset_bit(to_colour, v);
-                P->vv[P->size++] = v;
-                bitset_intersect_with(candidates, g->bit_complement_nd[v], numwords);
-            }
-            bound += class_max_wt;
-            for (int k=j; k<P->size; k++)
-                cumulative_wt_bound[k] = bound;
-            j = P->size;
         }
     }
+//        printf("%ld\n", oldbound-bound);
+    free(residual_wt);
+
     free(to_colour);
     free(candidates);
 }
 
 void expand(struct Graph *g, struct VtxList *C, struct UnweightedVtxList *P,
         struct VtxList *incumbent, int level, long *expand_call_count,
-        bool quiet, bool tavares_colour)
+        bool quiet)
 {
     (*expand_call_count)++;
     if (*expand_call_count % 100000 == 0)
@@ -405,7 +379,7 @@ void expand(struct Graph *g, struct VtxList *C, struct UnweightedVtxList *P,
     }
 
     long *cumulative_wt_bound = malloc(g->n * sizeof *cumulative_wt_bound);
-    colouring_bound(g, P, cumulative_wt_bound, tavares_colour, incumbent->total_wt - C->total_wt);
+    colouring_bound(g, P, cumulative_wt_bound, incumbent->total_wt - C->total_wt);
 
     struct UnweightedVtxList new_P;
     init_UnweightedVtxList(&new_P, g->n);
@@ -422,7 +396,7 @@ void expand(struct Graph *g, struct VtxList *C, struct UnweightedVtxList *P,
         }
 
         vtxlist_push_vtx(g, C, v);
-        expand(g, C, &new_P, incumbent, level+1, expand_call_count, quiet, tavares_colour);
+        expand(g, C, &new_P, incumbent, level+1, expand_call_count, quiet);
         vtxlist_pop_vtx(g, C);
     }
 
@@ -431,7 +405,7 @@ void expand(struct Graph *g, struct VtxList *C, struct UnweightedVtxList *P,
 }
 
 void mc(struct Graph* g, long *expand_call_count,
-        bool quiet, bool tavares_colour, int vtx_ordering, struct VtxList *incumbent)
+        bool quiet, int vtx_ordering, struct VtxList *incumbent)
 {
     calculate_all_degrees(g);
 
@@ -462,7 +436,7 @@ void mc(struct Graph* g, long *expand_call_count,
     for (int v=0; v<g->n; v++) P.vv[P.size++] = v;
     struct VtxList C;
     init_VtxList(&C, ordered_graph->n);
-    expand(ordered_graph, &C, &P, incumbent, 0, expand_call_count, quiet, tavares_colour);
+    expand(ordered_graph, &C, &P, incumbent, 0, expand_call_count, quiet);
     destroy_VtxList(&C);
     destroy_UnweightedVtxList(&P);
 

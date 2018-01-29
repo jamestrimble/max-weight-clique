@@ -239,6 +239,12 @@ struct PreAlloc
     // last_clause[v] is the index of the last clause in which v appears
     int *last_clause;
 
+    unsigned long long *to_colour;
+
+    unsigned long long *candidates;
+
+    long *residual_wt;
+
     struct IntStack S;
 
     struct IntStackWithoutDups I;
@@ -255,6 +261,9 @@ void init_PreAlloc(struct PreAlloc *pre_alloc, int n)
     pre_alloc->reason = malloc(n * sizeof(*pre_alloc->reason));
     pre_alloc->vertex_has_been_propagated = malloc(n * sizeof(*pre_alloc->vertex_has_been_propagated));
     pre_alloc->last_clause = malloc(n * sizeof(*pre_alloc->last_clause));
+    pre_alloc->to_colour = malloc((n+BITS_PER_WORD-1)/BITS_PER_WORD * sizeof *pre_alloc->to_colour);
+    pre_alloc->candidates = malloc((n+BITS_PER_WORD-1)/BITS_PER_WORD * sizeof *pre_alloc->candidates);
+    pre_alloc->residual_wt = malloc(n * sizeof *pre_alloc->residual_wt);
     init_IntStack(&pre_alloc->S, n);
     init_IntStackWithoutDups(&pre_alloc->I, n);
     init_IntStackWithoutDups(&pre_alloc->iset, n);
@@ -267,6 +276,9 @@ void destroy_PreAlloc(struct PreAlloc *pre_alloc)
     free(pre_alloc->reason);
     free(pre_alloc->vertex_has_been_propagated);
     free(pre_alloc->last_clause);
+    free(pre_alloc->to_colour);
+    free(pre_alloc->candidates);
+    free(pre_alloc->residual_wt);
     destroy_IntStack(&pre_alloc->S);
     destroy_IntStackWithoutDups(&pre_alloc->I);
     destroy_IntStackWithoutDups(&pre_alloc->iset);
@@ -530,8 +542,8 @@ long unit_propagate(struct PreAlloc *pre_alloc, struct Graph *g, struct ListOfCl
 bool colouring_bound(struct PreAlloc *pre_alloc, struct Graph *g, struct UnweightedVtxList *P,
         long *cumulative_wt_bound, long target)
 {
-    unsigned long long *to_colour = calloc((g->n+BITS_PER_WORD-1)/BITS_PER_WORD, sizeof *to_colour);
-    unsigned long long *candidates = malloc((g->n+BITS_PER_WORD-1)/BITS_PER_WORD * sizeof *candidates);
+    for (int i=(g->n+BITS_PER_WORD-1)/BITS_PER_WORD; i--; )
+        pre_alloc->to_colour[i] = 0;
 
     int max_v = 0;
     for (int i=0; i<P->size; i++)
@@ -541,39 +553,38 @@ bool colouring_bound(struct PreAlloc *pre_alloc, struct Graph *g, struct Unweigh
     int numwords = max_v/BITS_PER_WORD+1;
 
     for (int i=0; i<P->size; i++)
-        set_bit(to_colour, P->vv[i]);
+        set_bit(pre_alloc->to_colour, P->vv[i]);
 
     int v;
     long bound = 0;
 
-    long *residual_wt = malloc(g->n * sizeof *residual_wt);
     for (int i=0; i<P->size; i++)
-        residual_wt[P->vv[i]] = g->weight[P->vv[i]];
+        pre_alloc->residual_wt[P->vv[i]] = g->weight[P->vv[i]];
 
     clear_ListOfClauses(&pre_alloc->cc);
 
-    while ((v=first_set_bit(to_colour, numwords))!=-1) {
+    while ((v=first_set_bit(pre_alloc->to_colour, numwords))!=-1) {
 //            numwords = v/BITS_PER_WORD+1;
-        copy_bitset(to_colour, candidates, numwords);
-        long class_min_wt = residual_wt[v];
-        unset_bit(to_colour, v);
+        copy_bitset(pre_alloc->to_colour, pre_alloc->candidates, numwords);
+        long class_min_wt = pre_alloc->residual_wt[v];
+        unset_bit(pre_alloc->to_colour, v);
         struct Clause *clause = &pre_alloc->cc.clause[pre_alloc->cc.size];
         clause->vv.size = 0;
         push_to_IntVec(&clause->vv, v);
-        bitset_intersect_with(candidates, g->bit_complement_nd[v], numwords);
-        while ((v=first_set_bit(candidates, numwords))!=-1) {
-            if (residual_wt[v] < class_min_wt)
-                class_min_wt = residual_wt[v];
-            unset_bit(to_colour, v);
+        bitset_intersect_with(pre_alloc->candidates, g->bit_complement_nd[v], numwords);
+        while ((v=first_set_bit(pre_alloc->candidates, numwords))!=-1) {
+            if (pre_alloc->residual_wt[v] < class_min_wt)
+                class_min_wt = pre_alloc->residual_wt[v];
+            unset_bit(pre_alloc->to_colour, v);
             push_to_IntVec(&clause->vv, v);
-            bitset_intersect_with(candidates, g->bit_complement_nd[v], numwords);
+            bitset_intersect_with(pre_alloc->candidates, g->bit_complement_nd[v], numwords);
         }
 //            printf("%ld\n", class_min_wt);
         for (int i=0; i<clause->vv.size; i++) {
             int w = clause->vv.vals[i];
-            residual_wt[w] -= class_min_wt;
-            if (residual_wt[w] > 0) {
-                set_bit(to_colour, w);
+            pre_alloc->residual_wt[w] -= class_min_wt;
+            if (pre_alloc->residual_wt[w] > 0) {
+                set_bit(pre_alloc->to_colour, w);
             } else {
                 pre_alloc->last_clause[w] = pre_alloc->cc.size;
             }
@@ -604,10 +615,6 @@ bool colouring_bound(struct PreAlloc *pre_alloc, struct Graph *g, struct Unweigh
             }
         }
     }
-
-    free(residual_wt);
-    free(to_colour);
-    free(candidates);
 
     return !proved_we_can_prune;
 }

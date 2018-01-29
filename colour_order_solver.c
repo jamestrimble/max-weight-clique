@@ -15,8 +15,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define BIGNUM 2000
-
 /*******************************************************************************
 *                                     Data                                     *
 *******************************************************************************/
@@ -110,13 +108,47 @@ void clear_stack_without_dups(struct IntStackWithoutDups *s)
 /*******************************************************************************
 *******************************************************************************/
 
-//struct IntVec
-//{
-//};
+struct IntVec
+{
+    int *vals;
+    int size;
+    int capacity;
+};
+
+void init_IntVec(struct IntVec *vec)
+{
+    vec->vals = malloc(sizeof(*vec->vals));
+    vec->size = 0;
+    vec->capacity = 1;
+}
+
+void destroy_IntVec(struct IntVec *vec)
+{
+    free(vec->vals);
+}
+
+void clear_IntVec(struct IntVec *vec)
+{
+    vec->size = 0;
+}
+
+void push_to_IntVec(struct IntVec *vec, int val)
+{
+    if (vec->size == vec->capacity) {
+        vec->capacity <<= 1;
+        vec->vals = realloc(vec->vals, vec->capacity * sizeof(*vec->vals));
+    }
+    vec->vals[vec->size++] = val;
+}
+
+/*******************************************************************************
+*******************************************************************************/
+
 struct Clause {
+    struct IntVec vv;
     long weight;
-    int vv[BIGNUM];
-    int vv_len;
+//    int vv[BIGNUM];
+//    int vv_len;
     int remaining_vv_count;
     long remaining_wt;
 };
@@ -124,18 +156,31 @@ struct Clause {
 struct ListOfClauses {
     struct Clause *clause;
     int size;
-//    int capacity;
+    int capacity;
 };
 
 void init_ListOfClauses(struct ListOfClauses *l, int n)
 {
     l->clause = malloc(n * sizeof(*l->clause));
     l->size = 0;
-//    l->capacity = n;
+    l->capacity = n;
+    for (int i=0; i<n; i++)
+    {
+        init_IntVec(&l->clause[i].vv);
+    }
+}
+
+void clear_ListOfClauses(struct ListOfClauses *l)
+{
+    l->size = 0;
 }
 
 void destroy_ListOfClauses(struct ListOfClauses *l)
 {
+    for (int i=0; i<l->capacity; i++)
+    {
+        destroy_IntVec(&l->clause[i].vv);
+    }
     free(l->clause);
 }
 
@@ -144,16 +189,40 @@ void destroy_ListOfClauses(struct ListOfClauses *l)
 
 // Which clauses does each vertex belong to?
 struct ClauseMembership {
-    int list[BIGNUM][BIGNUM];
-    int list_len[BIGNUM];
+    struct IntVec *vtx_to_clauses;
+    int capacity;
 };
 
-void ClauseMembership_init(struct ClauseMembership *cm,
-        int num_vertices)
+void init_ClauseMembership(struct ClauseMembership *cm, int n)
 {
-    for (int i=0; i<num_vertices; i++)
-        cm->list_len[i] = 0;
+    cm->vtx_to_clauses = malloc(n * sizeof(*cm->vtx_to_clauses));
+    cm->capacity = n;
+    for (int i=0; i<n; i++)
+    {
+        init_IntVec(&cm->vtx_to_clauses[i]);
+    }
 }
+
+void destroy_ClauseMembership(struct ClauseMembership *cm)
+{
+    for (int i=0; i<cm->capacity; i++)
+    {
+        destroy_IntVec(&cm->vtx_to_clauses[i]);
+    }
+    free(cm->vtx_to_clauses);
+}
+
+//struct ClauseMembership {
+//    int list[BIGNUM][BIGNUM];
+//    int list_len[BIGNUM];
+//};
+//
+//void ClauseMembership_init(struct ClauseMembership *cm,
+//        int num_vertices)
+//{
+//    for (int i=0; i<num_vertices; i++)
+//        cm->list_len[i] = 0;
+//}
 
 /*******************************************************************************
 *******************************************************************************/
@@ -171,6 +240,10 @@ struct PreAlloc
     struct IntStackWithoutDups I;
 
     struct IntStackWithoutDups iset;
+
+    struct ListOfClauses cc;
+
+    struct ClauseMembership cm;
 };
 
 void init_PreAlloc(struct PreAlloc *pre_alloc, int n)
@@ -180,6 +253,8 @@ void init_PreAlloc(struct PreAlloc *pre_alloc, int n)
     init_IntStack(&pre_alloc->S, n);
     init_IntStackWithoutDups(&pre_alloc->I, n);
     init_IntStackWithoutDups(&pre_alloc->iset, n);
+    init_ListOfClauses(&pre_alloc->cc, n);
+    init_ClauseMembership(&pre_alloc->cm, n);
 }
 
 void destroy_PreAlloc(struct PreAlloc *pre_alloc)
@@ -189,14 +264,16 @@ void destroy_PreAlloc(struct PreAlloc *pre_alloc)
     destroy_IntStack(&pre_alloc->S);
     destroy_IntStackWithoutDups(&pre_alloc->I);
     destroy_IntStackWithoutDups(&pre_alloc->iset);
+    destroy_ListOfClauses(&pre_alloc->cc);
+    destroy_ClauseMembership(&pre_alloc->cm);
 }
 
 /*******************************************************************************
 *******************************************************************************/
 
 int get_unique_remaining_vtx(struct Clause *c, int *reason) {
-    for (int i=0; i<c->vv_len; i++) {
-        int v = c->vv[i];
+    for (int i=0; i<c->vv.size; i++) {
+        int v = c->vv.vals[i];
         if (reason[v] == -1)
             return v;
     }
@@ -215,8 +292,8 @@ void create_inconsistent_set(struct PreAlloc *pre_alloc, struct Graph *g, struct
     while(S->size) {
         int d_idx = pop(S);
         struct Clause *d = &cc->clause[d_idx];
-        for (int k=0; k<d->vv_len; k++) {
-            int t = d->vv[k];
+        for (int k=0; k<d->vv.size; k++) {
+            int t = d->vv.vals[k];
             int r = reason[t];
             if (r != -1) {  // " removed literal l' "
                 if (!I->on_stack[r]) {
@@ -229,13 +306,13 @@ void create_inconsistent_set(struct PreAlloc *pre_alloc, struct Graph *g, struct
 }
 
 void unit_propagate_once(struct PreAlloc *pre_alloc, struct Graph *g, struct ListOfClauses *cc,
-        struct ClauseMembership *cm, struct IntStackWithoutDups *I)
+        struct IntStackWithoutDups *I)
 {
     clear_IntStack(&pre_alloc->S);
     for (int i=0; i<cc->size; i++) {
         struct Clause *clause = &cc->clause[i];
-        clause->remaining_vv_count = clause->vv_len;
-        if (clause->vv_len==1 && clause->remaining_wt) {
+        clause->remaining_vv_count = clause->vv.size;
+        if (clause->vv.size==1 && clause->remaining_wt) {
             push(&pre_alloc->S, i);
         }
     }
@@ -259,11 +336,11 @@ void unit_propagate_once(struct PreAlloc *pre_alloc, struct Graph *g, struct Lis
             //reason[v] = u_idx;
             for (int i=0; i<g->nonadjlists[v].size; i++) {
                 int w = g->nonadjlists[v].vals[i];
-                if (cm->list_len[w]) {
+                if (pre_alloc->cm.vtx_to_clauses[w].size) {
                     if (pre_alloc->reason[w] == -1) {
                         pre_alloc->reason[w] = u_idx;
-                        for (int j=0; j<cm->list_len[w]; j++) {
-                            int c_idx = cm->list[w][j];
+                        for (int j=0; j<pre_alloc->cm.vtx_to_clauses[w].size; j++) {
+                            int c_idx = pre_alloc->cm.vtx_to_clauses[w].vals[j];
                             struct Clause *c = &cc->clause[c_idx];
                             c->remaining_vv_count--;
                             if (c->remaining_vv_count==1) {
@@ -285,11 +362,11 @@ void unit_propagate_once(struct PreAlloc *pre_alloc, struct Graph *g, struct Lis
 
 void remove_from_clause_membership(int v, int clause_idx, struct ClauseMembership *cm)
 {
-    for (int i=0; i<cm->list_len[v]; i++) {
-        if (cm->list[v][i] == clause_idx) {
-            cm->list[v][i] = cm->list[v][cm->list_len[v]-1];
-            cm->list[v][cm->list_len[v]-1] = clause_idx;
-            cm->list_len[v]--;
+    for (int i=0; i<cm->vtx_to_clauses[v].size; i++) {
+        if (cm->vtx_to_clauses[v].vals[i] == clause_idx) {
+            cm->vtx_to_clauses[v].vals[i] = cm->vtx_to_clauses[v].vals[cm->vtx_to_clauses[v].size-1];
+            cm->vtx_to_clauses[v].vals[cm->vtx_to_clauses[v].size-1] = clause_idx;
+            cm->vtx_to_clauses[v].size--;
             return;
         }
     }
@@ -298,22 +375,22 @@ void remove_from_clause_membership(int v, int clause_idx, struct ClauseMembershi
 
 void fake_length_one_clause(struct Clause *clause, int clause_idx, int vtx_pos,
         struct ClauseMembership *cm) {
-    int tmp = clause->vv[vtx_pos];
-    clause->vv[vtx_pos] = clause->vv[0];
-    clause->vv[0] = tmp;
-    for (int i=1; i<clause->vv_len; i++) {
-        int v = clause->vv[i];
+    int tmp = clause->vv.vals[vtx_pos];
+    clause->vv.vals[vtx_pos] = clause->vv.vals[0];
+    clause->vv.vals[0] = tmp;
+    for (int i=1; i<clause->vv.size; i++) {
+        int v = clause->vv.vals[i];
         remove_from_clause_membership(v, clause_idx, cm);
     }
-    clause->vv_len = 1;
+    clause->vv.size = 1;
 }
 
 void unfake_length_one_clause(struct Clause *clause, int clause_idx, int clause_len,
         struct ClauseMembership *cm) {
-    clause->vv_len = clause_len;
+    clause->vv.size = clause_len;
     for (int i=1; i<clause_len; i++) {
-        int v = clause->vv[i];
-        cm->list[v][cm->list_len[v]++] = clause_idx;
+        int v = clause->vv.vals[i];
+        cm->vtx_to_clauses[v].vals[cm->vtx_to_clauses[v].size++] = clause_idx;
     }
 }
 
@@ -322,16 +399,15 @@ bool look_for_iset_using_non_unit_clause(
         struct Graph *g,
         struct Clause *clause,
         int clause_idx,
-        struct ListOfClauses *cc,
-        struct ClauseMembership *cm)
+        struct ListOfClauses *cc)
 {
     clear_stack_without_dups(&pre_alloc->iset);
-    int clause_len = clause->vv_len;
+    int clause_len = clause->vv.size;
     for (int z=0; z<clause_len; z++) {
         clear_stack_without_dups(&pre_alloc->I);
-        fake_length_one_clause(clause, clause_idx, z, cm);
-        unit_propagate_once(pre_alloc, g, cc, cm, &pre_alloc->I);
-        unfake_length_one_clause(clause, clause_idx, clause_len, cm);
+        fake_length_one_clause(clause, clause_idx, z, &pre_alloc->cm);
+        unit_propagate_once(pre_alloc, g, cc, &pre_alloc->I);
+        unfake_length_one_clause(clause, clause_idx, clause_len, &pre_alloc->cm);
         if (pre_alloc->I.size==0)
             return false;
         for (int i=0; i<pre_alloc->I.size; i++)
@@ -342,10 +418,10 @@ bool look_for_iset_using_non_unit_clause(
 
 void remove_clause_membership(struct ClauseMembership *cm, int v, int clause_idx)
 {
-    for (int i=0; i<cm->list_len[v]; i++) {
-        if (cm->list[v][i] == clause_idx) {
-            cm->list[v][i] = cm->list[v][cm->list_len[v]-1];
-            cm->list_len[v]--;
+    for (int i=0; i<cm->vtx_to_clauses[v].size; i++) {
+        if (cm->vtx_to_clauses[v].vals[i] == clause_idx) {
+            cm->vtx_to_clauses[v].vals[i] = cm->vtx_to_clauses[v].vals[cm->vtx_to_clauses[v].size-1];
+            cm->vtx_to_clauses[v].size--;
             return;
         }
     }
@@ -374,8 +450,8 @@ long process_inconsistent_set(
         cc->clause[c_idx].remaining_wt -= min_wt;
         if (cc->clause[c_idx].remaining_wt == 0) {
             // Remove references to this clause from CM
-            for (int j=0; j<cc->clause[c_idx].vv_len; j++) {
-                int v = cc->clause[c_idx].vv[j];
+            for (int j=0; j<cc->clause[c_idx].vv.size; j++) {
+                int v = cc->clause[c_idx].vv.vals[j];
                 remove_clause_membership(cm, v, c_idx);
             }
         }
@@ -389,15 +465,19 @@ long unit_propagate(struct PreAlloc *pre_alloc, struct Graph *g, struct ListOfCl
     if (target_reduction <= 0)
         return 0;
 
-    static struct ClauseMembership cm;
-    ClauseMembership_init(&cm, g->n);
+//    static struct ClauseMembership cm;
+//    ClauseMembership_init(&cm, g->n);
+    for (int v=0; v<g->n; v++)
+        clear_IntVec(&pre_alloc->cm.vtx_to_clauses[v]);
+
     for (int i=0; i<cc->size; i++) {
         struct Clause *clause = &cc->clause[i];
-        for (int j=0; j<clause->vv_len; j++) {
-            int v = clause->vv[j];
-            cm.list[v][cm.list_len[v]++] = i;
+        for (int j=0; j<clause->vv.size; j++) {
+            int v = clause->vv.vals[j];
+            push_to_IntVec(&pre_alloc->cm.vtx_to_clauses[v], i);
         }
     }
+
     for (int i=0; i<cc->size; i++)
         cc->clause[i].remaining_wt = cc->clause[i].weight;
 
@@ -405,40 +485,33 @@ long unit_propagate(struct PreAlloc *pre_alloc, struct Graph *g, struct ListOfCl
 
     for (;;) {
         clear_stack_without_dups(&pre_alloc->I);
-        unit_propagate_once(pre_alloc, g, cc, &cm, &pre_alloc->I);
+        unit_propagate_once(pre_alloc, g, cc, &pre_alloc->I);
 
         if (pre_alloc->I.size==0)
             break;
 
-        improvement += process_inconsistent_set(&pre_alloc->I, cc, &cm);
+        improvement += process_inconsistent_set(&pre_alloc->I, cc, &pre_alloc->cm);
 
         if (improvement >= target_reduction)
             return improvement;
     }
 
-//    for (int i=0; i<cc->size; i++) {
-//        struct Clause *clause = &cc->clause[i];
-//        printf("%ld ", clause->remaining_wt);
-//    }
-//    printf("\n");
-//    printf("\n");
-//
     for (int i=0; i<cc->size; i++) {
         struct Clause *clause = &cc->clause[i];
         for (;;) {
-            if (clause->vv_len == 1)
+            if (clause->vv.size == 1)
                 break;
 
             if (clause->remaining_wt == 0)
                 break;
 
             bool found_iset = look_for_iset_using_non_unit_clause(
-                    pre_alloc, g, clause, i, cc, &cm);
+                    pre_alloc, g, clause, i, cc);
 
             if (!found_iset)
                 break;
 
-            improvement += process_inconsistent_set(&pre_alloc->iset, cc, &cm);
+            improvement += process_inconsistent_set(&pre_alloc->iset, cc, &pre_alloc->cm);
 
             if (improvement >= target_reduction)
                 return improvement;
@@ -469,58 +542,57 @@ bool colouring_bound(struct PreAlloc *pre_alloc, struct Graph *g, struct Unweigh
     int v;
     long bound = 0;
 
-    static struct ListOfClauses cc;
-    init_ListOfClauses(&cc, g->n);
-
     long *residual_wt = malloc(g->n * sizeof *residual_wt);
     for (int i=0; i<P->size; i++)
         residual_wt[P->vv[i]] = g->weight[P->vv[i]];
+
+    clear_ListOfClauses(&pre_alloc->cc);
 
     while ((v=first_set_bit(to_colour, numwords))!=-1) {
 //            numwords = v/BITS_PER_WORD+1;
         copy_bitset(to_colour, candidates, numwords);
         long class_min_wt = residual_wt[v];
         unset_bit(to_colour, v);
-        struct Clause *clause = &cc.clause[cc.size];
-        clause->vv_len = 1;
-        clause->vv[0] = v;
+        struct Clause *clause = &pre_alloc->cc.clause[pre_alloc->cc.size];
+        clause->vv.size = 0;
+        push_to_IntVec(&clause->vv, v);
         bitset_intersect_with(candidates, g->bit_complement_nd[v], numwords);
         while ((v=first_set_bit(candidates, numwords))!=-1) {
             if (residual_wt[v] < class_min_wt)
                 class_min_wt = residual_wt[v];
             unset_bit(to_colour, v);
-            clause->vv[clause->vv_len++] = v;
+            push_to_IntVec(&clause->vv, v);
             bitset_intersect_with(candidates, g->bit_complement_nd[v], numwords);
         }
 //            printf("%ld\n", class_min_wt);
-        for (int i=0; i<clause->vv_len; i++) {
-            int w = clause->vv[i];
+        for (int i=0; i<clause->vv.size; i++) {
+            int w = clause->vv.vals[i];
             residual_wt[w] -= class_min_wt;
             if (residual_wt[w] > 0) {
                 set_bit(to_colour, w);
             } else {
-                last_clause[w] = cc.size;
+                last_clause[w] = pre_alloc->cc.size;
             }
         }
         bound += class_min_wt;
         clause->weight = class_min_wt;
-        cc.size++;
+        pre_alloc->cc.size++;
     }
 
-    long improvement = unit_propagate(pre_alloc, g, &cc, bound-target);
+    long improvement = unit_propagate(pre_alloc, g, &pre_alloc->cc, bound-target);
 
     bool proved_we_can_prune = bound-improvement <= target;
 
     if (!proved_we_can_prune) {
         P->size = 0;
         bound = 0;
-        for (int i=0; i<cc.size; i++) {
-            struct Clause *clause = &cc.clause[i];
+        for (int i=0; i<pre_alloc->cc.size; i++) {
+            struct Clause *clause = &pre_alloc->cc.clause[i];
             assert (clause->weight >= 0);
             bound += clause->weight;
     //            printf("%ld\n", bound);
-            for (int j=0; j<clause->vv_len; j++) {
-                int w = clause->vv[j];
+            for (int j=0; j<clause->vv.size; j++) {
+                int w = clause->vv.vals[j];
                 if (last_clause[w] == i) {
                     cumulative_wt_bound[P->size] = bound;
                     P->vv[P->size++] = w;
@@ -531,7 +603,6 @@ bool colouring_bound(struct PreAlloc *pre_alloc, struct Graph *g, struct Unweigh
 
     free(last_clause);
     free(residual_wt);
-    destroy_ListOfClauses(&cc);
     free(to_colour);
     free(candidates);
 

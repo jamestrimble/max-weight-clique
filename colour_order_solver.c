@@ -15,22 +15,100 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define BIGNUM 2000
+
 /*******************************************************************************
 *                                     Data                                     *
 *******************************************************************************/
 
-#define BIGNUM 2000
+/*******************************************************************************
+*                                     Stack                                    *
+*******************************************************************************/
 
 struct IntStack {
+    int *vals;
     int size;
-    int vals[BIGNUM];
 };
+
+void init_IntStack(struct IntStack *s, int capacity)
+{
+    s->vals = malloc(capacity * sizeof(*s->vals));
+    s->size = 0;
+}
+
+void clear_IntStack(struct IntStack *s)
+{
+    s->size = 0;
+}
+
+void destroy_IntStack(struct IntStack *s)
+{
+    free(s->vals);
+}
+
+void push(struct IntStack *s, int val)
+{
+//    assert (s->size < BIGNUM);
+    s->vals[s->size++] = val;
+}
+
+int pop(struct IntStack *s)
+{
+    assert (s->size != 0);
+    return s->vals[--s->size];
+}
+
+/*******************************************************************************
+*******************************************************************************/
 
 struct IntStackWithoutDups {
     int size;
-    int vals[BIGNUM];
-    bool on_stack[BIGNUM];
+    int *vals;
+    bool *on_stack;
 };
+
+void init_IntStackWithoutDups(struct IntStackWithoutDups *s,
+        int max_member_val)
+{
+    s->size = 0;
+    s->vals = malloc(max_member_val * sizeof(*s->vals));
+    s->on_stack = malloc(max_member_val * sizeof(*s->on_stack));
+    for (int i=0; i<max_member_val; i++)
+        s->on_stack[i] = false;
+}
+
+void destroy_IntStackWithoutDups(struct IntStackWithoutDups *s)
+{
+    free(s->vals);
+    free(s->on_stack);
+}
+
+void push_without_dups(struct IntStackWithoutDups *s, int val)
+{
+    if (!s->on_stack[val]) {
+//        assert (s->size < BIGNUM);
+        s->vals[s->size++] = val;
+        s->on_stack[val] = true;
+    }
+}
+
+int pop_without_dups(struct IntStackWithoutDups *s)
+{
+    assert (s->size != 0);
+    int val = s->vals[--s->size];
+    s->on_stack[val] = false;
+    return val;
+}
+
+void clear_stack_without_dups(struct IntStackWithoutDups *s)
+{
+    for (int i=0; i<s->size; i++)
+        s->on_stack[s->vals[i]] = false;
+    s->size = 0;
+}
+
+/*******************************************************************************
+*******************************************************************************/
 
 struct IntQueue {
     int start;
@@ -67,55 +145,6 @@ struct ClauseMembership {
     int list[BIGNUM][BIGNUM];
     int list_len[BIGNUM];
 };
-
-void init_stack(struct IntStack *s)
-{
-    s->size = 0;
-}
-
-void push(struct IntStack *s, int val)
-{
-//    assert (s->size < BIGNUM);
-    s->vals[s->size++] = val;
-}
-
-int pop(struct IntStack *s)
-{
-    assert (s->size != 0);
-    return s->vals[--s->size];
-}
-
-void init_stack_without_dups(struct IntStackWithoutDups *s,
-        int max_member_val)
-{
-    s->size = 0;
-    for (int i=0; i<max_member_val; i++)
-        s->on_stack[i] = false;
-}
-
-void push_without_dups(struct IntStackWithoutDups *s, int val)
-{
-    if (!s->on_stack[val]) {
-//        assert (s->size < BIGNUM);
-        s->vals[s->size++] = val;
-        s->on_stack[val] = true;
-    }
-}
-
-int pop_without_dups(struct IntStackWithoutDups *s)
-{
-    assert (s->size != 0);
-    int val = s->vals[--s->size];
-    s->on_stack[val] = false;
-    return val;
-}
-
-void clear_stack_without_dups(struct IntStackWithoutDups *s)
-{
-    for (int i=0; i<s->size; i++)
-        s->on_stack[s->vals[i]] = false;
-    s->size = 0;
-}
 
 void init_queue(struct IntQueue *q)
 {
@@ -193,63 +222,74 @@ struct PreAlloc
 
     // used in unit_propagate_once
     bool *vertex_has_been_propagated;
+
+    struct IntStack S;
+
+    struct IntStackWithoutDups I;
+
+    struct IntStackWithoutDups iset;
 };
 
 void init_PreAlloc(struct PreAlloc *pre_alloc, int n)
 {
     pre_alloc->reason = malloc(n * sizeof(*pre_alloc->reason));
     pre_alloc->vertex_has_been_propagated = malloc(n * sizeof(*pre_alloc->vertex_has_been_propagated));
+    init_IntStack(&pre_alloc->S, n);
+    init_IntStackWithoutDups(&pre_alloc->I, n);
+    init_IntStackWithoutDups(&pre_alloc->iset, n);
 }
 
 void destroy_PreAlloc(struct PreAlloc *pre_alloc)
 {
     free(pre_alloc->reason);
     free(pre_alloc->vertex_has_been_propagated);
+    destroy_IntStack(&pre_alloc->S);
+    destroy_IntStackWithoutDups(&pre_alloc->I);
+    destroy_IntStackWithoutDups(&pre_alloc->iset);
 }
 
-void unit_propagate_once(struct PreAlloc pre_alloc, struct Graph *g, struct ListOfClauses *cc,
+void unit_propagate_once(struct PreAlloc *pre_alloc, struct Graph *g, struct ListOfClauses *cc,
         struct ClauseMembership *cm, struct IntStackWithoutDups *I)
 {
-    struct IntStack S;
-    init_stack(&S);
+    clear_IntStack(&pre_alloc->S);
     for (int i=0; i<cc->size; i++) {
         struct Clause *clause = &cc->clause[i];
         clause->remaining_vv_count = clause->vv_len;
         if (clause->vv_len==1 && clause->remaining_wt) {
-            push(&S, i);
+            push(&pre_alloc->S, i);
         }
     }
 //    INSERTION_SORT(int, S.vals, S.size,
 //            (cc->clause[S.vals[j-1]].weight > cc->clause[S.vals[j]].weight))
 
     for (int i=0; i<g->n; i++) {
-        pre_alloc.reason[i] = -1;
-        pre_alloc.vertex_has_been_propagated[i] = false;
+        pre_alloc->reason[i] = -1;
+        pre_alloc->vertex_has_been_propagated[i] = false;
     }
 
-    while (S.size) {
+    while (pre_alloc->S.size) {
         //printf("S.size %d\n", S.size);
-        int u_idx = pop(&S);
+        int u_idx = pop(&pre_alloc->S);
         struct Clause *u = &cc->clause[u_idx];
         assert (u->remaining_vv_count == 1);
-        int v = get_unique_remaining_vtx(u, pre_alloc.reason);
-        if (!pre_alloc.vertex_has_been_propagated[v]) {
+        int v = get_unique_remaining_vtx(u, pre_alloc->reason);
+        if (!pre_alloc->vertex_has_been_propagated[v]) {
 //            printf("%d ", v);
             //TODO: think about the next commented-out line. Should it be included???
             //reason[v] = u_idx;
             for (int i=0; i<g->nonadjlists[v].size; i++) {
                 int w = g->nonadjlists[v].vals[i];
                 if (cm->list_len[w]) {
-                    if (pre_alloc.reason[w] == -1) {
-                        pre_alloc.reason[w] = u_idx;
+                    if (pre_alloc->reason[w] == -1) {
+                        pre_alloc->reason[w] = u_idx;
                         for (int j=0; j<cm->list_len[w]; j++) {
                             int c_idx = cm->list[w][j];
                             struct Clause *c = &cc->clause[c_idx];
                             c->remaining_vv_count--;
                             if (c->remaining_vv_count==1) {
-                                push(&S, c_idx);
+                                push(&pre_alloc->S, c_idx);
                             } else if (c->remaining_vv_count==0) {
-                                create_inconsistent_set(I, c_idx, cc, pre_alloc.reason);
+                                create_inconsistent_set(I, c_idx, cc, pre_alloc->reason);
     //                            printf("\n");
                                 return;
                             }
@@ -258,7 +298,7 @@ void unit_propagate_once(struct PreAlloc pre_alloc, struct Graph *g, struct List
                 }
             }
         }
-        pre_alloc.vertex_has_been_propagated[v] = true;
+        pre_alloc->vertex_has_been_propagated[v] = true;
     }
 //    printf("\n");
 }
@@ -298,26 +338,24 @@ void unfake_length_one_clause(struct Clause *clause, int clause_idx, int clause_
 }
 
 bool look_for_iset_using_non_unit_clause(
-        struct PreAlloc pre_alloc,
+        struct PreAlloc *pre_alloc,
         struct Graph *g,
         struct Clause *clause,
         int clause_idx,
         struct ListOfClauses *cc,
-        struct ClauseMembership *cm,
-        struct IntStackWithoutDups *I,
-        struct IntStackWithoutDups *iset)
+        struct ClauseMembership *cm)
 {
-    clear_stack_without_dups(iset);
+    clear_stack_without_dups(&pre_alloc->iset);
     int clause_len = clause->vv_len;
     for (int z=0; z<clause_len; z++) {
-        clear_stack_without_dups(I);
+        clear_stack_without_dups(&pre_alloc->I);
         fake_length_one_clause(clause, clause_idx, z, cm);
-        unit_propagate_once(pre_alloc, g, cc, cm, I);
+        unit_propagate_once(pre_alloc, g, cc, cm, &pre_alloc->I);
         unfake_length_one_clause(clause, clause_idx, clause_len, cm);
-        if (I->size==0)
+        if (pre_alloc->I.size==0)
             return false;
-        for (int i=0; i<I->size; i++)
-            push_without_dups(iset, I->vals[i]);
+        for (int i=0; i<pre_alloc->I.size; i++)
+            push_without_dups(&pre_alloc->iset, pre_alloc->I.vals[i]);
     }
     return true;
 }
@@ -383,22 +421,19 @@ long unit_propagate(struct Graph *g, struct ListOfClauses *cc, long target_reduc
     for (int i=0; i<cc->size; i++)
         cc->clause[i].remaining_wt = cc->clause[i].weight;
 
-    struct IntStackWithoutDups I;
-    init_stack_without_dups(&I, cc->size);
-
     struct PreAlloc pre_alloc;
     init_PreAlloc(&pre_alloc, g->n);
 
     long improvement = 0;
 
     for (;;) {
-        clear_stack_without_dups(&I);
-        unit_propagate_once(pre_alloc, g, cc, &cm, &I);
+        clear_stack_without_dups(&pre_alloc.I);
+        unit_propagate_once(&pre_alloc, g, cc, &cm, &pre_alloc.I);
 
-        if (I.size==0)
+        if (pre_alloc.I.size==0)
             break;
 
-        improvement += process_inconsistent_set(&I, cc, &cm);
+        improvement += process_inconsistent_set(&pre_alloc.I, cc, &cm);
 
         if (improvement >= target_reduction)
             goto clean_up_unit_propagate;
@@ -411,8 +446,6 @@ long unit_propagate(struct Graph *g, struct ListOfClauses *cc, long target_reduc
 //    printf("\n");
 //    printf("\n");
 //
-    struct IntStackWithoutDups iset;
-    init_stack_without_dups(&iset, cc->size);
     for (int i=0; i<cc->size; i++) {
         struct Clause *clause = &cc->clause[i];
         for (;;) {
@@ -423,12 +456,12 @@ long unit_propagate(struct Graph *g, struct ListOfClauses *cc, long target_reduc
                 break;
 
             bool found_iset = look_for_iset_using_non_unit_clause(
-                    pre_alloc, g, clause, i, cc, &cm, &I, &iset);
+                    &pre_alloc, g, clause, i, cc, &cm);
 
             if (!found_iset)
                 break;
 
-            improvement += process_inconsistent_set(&iset, cc, &cm);
+            improvement += process_inconsistent_set(&pre_alloc.iset, cc, &cm);
 
             if (improvement >= target_reduction)
                 goto clean_up_unit_propagate;

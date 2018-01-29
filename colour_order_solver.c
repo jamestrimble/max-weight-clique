@@ -46,11 +46,21 @@ struct Clause {
     long remaining_wt;
 };
 
-
 struct ListOfClauses {
-    struct Clause clause[BIGNUM];
+    struct Clause *clause;
     int size;
 };
+
+void init_ListOfClauses(struct ListOfClauses *l, int n)
+{
+    l->clause = malloc(n * sizeof(*l->clause));
+    l->size = 0;
+}
+
+void destroy_ListOfClauses(struct ListOfClauses *l)
+{
+    free(l->clause);
+}
 
 // Which clauses does each vertex belong to?
 struct ClauseMembership {
@@ -65,7 +75,7 @@ void init_stack(struct IntStack *s)
 
 void push(struct IntStack *s, int val)
 {
-    assert (s->size < BIGNUM);
+//    assert (s->size < BIGNUM);
     s->vals[s->size++] = val;
 }
 
@@ -86,7 +96,7 @@ void init_stack_without_dups(struct IntStackWithoutDups *s,
 void push_without_dups(struct IntStackWithoutDups *s, int val)
 {
     if (!s->on_stack[val]) {
-        assert (s->size < BIGNUM);
+//        assert (s->size < BIGNUM);
         s->vals[s->size++] = val;
         s->on_stack[val] = true;
     }
@@ -120,7 +130,7 @@ bool queue_empty(struct IntQueue *q)
 
 void enqueue(struct IntQueue *q, int val)
 {
-    assert (q->start + q->size < BIGNUM);
+//    assert (q->start + q->size < BIGNUM);
     q->vals[q->start + q->size++] = val;
 }
 
@@ -176,7 +186,28 @@ void create_inconsistent_set(struct IntStackWithoutDups *I, int c_idx,
     }
 }
 
-void unit_propagate_once(struct Graph *g, struct ListOfClauses *cc,
+struct PreAlloc
+{
+    // in unit_propagate_once, each vertex has a clause index as its reason, or -1
+    int *reason;
+
+    // used in unit_propagate_once
+    bool *vertex_has_been_propagated;
+};
+
+void init_PreAlloc(struct PreAlloc *pre_alloc, int n)
+{
+    pre_alloc->reason = malloc(n * sizeof(*pre_alloc->reason));
+    pre_alloc->vertex_has_been_propagated = malloc(n * sizeof(*pre_alloc->vertex_has_been_propagated));
+}
+
+void destroy_PreAlloc(struct PreAlloc *pre_alloc)
+{
+    free(pre_alloc->reason);
+    free(pre_alloc->vertex_has_been_propagated);
+}
+
+void unit_propagate_once(struct PreAlloc pre_alloc, struct Graph *g, struct ListOfClauses *cc,
         struct ClauseMembership *cm, struct IntStackWithoutDups *I)
 {
     struct IntStack S;
@@ -191,12 +222,9 @@ void unit_propagate_once(struct Graph *g, struct ListOfClauses *cc,
 //    INSERTION_SORT(int, S.vals, S.size,
 //            (cc->clause[S.vals[j-1]].weight > cc->clause[S.vals[j]].weight))
 
-    // each vertex has a clause index as its reason, or -1
-    int reason[BIGNUM];
-    bool vertex_has_been_propagated[BIGNUM];
     for (int i=0; i<g->n; i++) {
-        reason[i] = -1;
-        vertex_has_been_propagated[i] = false;
+        pre_alloc.reason[i] = -1;
+        pre_alloc.vertex_has_been_propagated[i] = false;
     }
 
     while (S.size) {
@@ -204,16 +232,16 @@ void unit_propagate_once(struct Graph *g, struct ListOfClauses *cc,
         int u_idx = pop(&S);
         struct Clause *u = &cc->clause[u_idx];
         assert (u->remaining_vv_count == 1);
-        int v = get_unique_remaining_vtx(u, reason);
-        if (!vertex_has_been_propagated[v]) {
+        int v = get_unique_remaining_vtx(u, pre_alloc.reason);
+        if (!pre_alloc.vertex_has_been_propagated[v]) {
 //            printf("%d ", v);
             //TODO: think about the next commented-out line. Should it be included???
             //reason[v] = u_idx;
             for (int i=0; i<g->nonadjlists[v].size; i++) {
                 int w = g->nonadjlists[v].vals[i];
                 if (cm->list_len[w]) {
-                    if (reason[w] == -1) {
-                        reason[w] = u_idx;
+                    if (pre_alloc.reason[w] == -1) {
+                        pre_alloc.reason[w] = u_idx;
                         for (int j=0; j<cm->list_len[w]; j++) {
                             int c_idx = cm->list[w][j];
                             struct Clause *c = &cc->clause[c_idx];
@@ -221,7 +249,7 @@ void unit_propagate_once(struct Graph *g, struct ListOfClauses *cc,
                             if (c->remaining_vv_count==1) {
                                 push(&S, c_idx);
                             } else if (c->remaining_vv_count==0) {
-                                create_inconsistent_set(I, c_idx, cc, reason);
+                                create_inconsistent_set(I, c_idx, cc, pre_alloc.reason);
     //                            printf("\n");
                                 return;
                             }
@@ -230,7 +258,7 @@ void unit_propagate_once(struct Graph *g, struct ListOfClauses *cc,
                 }
             }
         }
-        vertex_has_been_propagated[v] = true;
+        pre_alloc.vertex_has_been_propagated[v] = true;
     }
 //    printf("\n");
 }
@@ -270,6 +298,7 @@ void unfake_length_one_clause(struct Clause *clause, int clause_idx, int clause_
 }
 
 bool look_for_iset_using_non_unit_clause(
+        struct PreAlloc pre_alloc,
         struct Graph *g,
         struct Clause *clause,
         int clause_idx,
@@ -283,7 +312,7 @@ bool look_for_iset_using_non_unit_clause(
     for (int z=0; z<clause_len; z++) {
         clear_stack_without_dups(I);
         fake_length_one_clause(clause, clause_idx, z, cm);
-        unit_propagate_once(g, cc, cm, I);
+        unit_propagate_once(pre_alloc, g, cc, cm, I);
         unfake_length_one_clause(clause, clause_idx, clause_len, cm);
         if (I->size==0)
             return false;
@@ -357,11 +386,14 @@ long unit_propagate(struct Graph *g, struct ListOfClauses *cc, long target_reduc
     struct IntStackWithoutDups I;
     init_stack_without_dups(&I, cc->size);
 
+    struct PreAlloc pre_alloc;
+    init_PreAlloc(&pre_alloc, g->n);
+
     long improvement = 0;
 
     for (;;) {
         clear_stack_without_dups(&I);
-        unit_propagate_once(g, cc, &cm, &I);
+        unit_propagate_once(pre_alloc, g, cc, &cm, &I);
 
         if (I.size==0)
             break;
@@ -369,7 +401,7 @@ long unit_propagate(struct Graph *g, struct ListOfClauses *cc, long target_reduc
         improvement += process_inconsistent_set(&I, cc, &cm);
 
         if (improvement >= target_reduction)
-            return improvement;
+            goto clean_up_unit_propagate;
     }
 
 //    for (int i=0; i<cc->size; i++) {
@@ -391,7 +423,7 @@ long unit_propagate(struct Graph *g, struct ListOfClauses *cc, long target_reduc
                 break;
 
             bool found_iset = look_for_iset_using_non_unit_clause(
-                    g, clause, i, cc, &cm, &I, &iset);
+                    pre_alloc, g, clause, i, cc, &cm, &I, &iset);
 
             if (!found_iset)
                 break;
@@ -399,10 +431,12 @@ long unit_propagate(struct Graph *g, struct ListOfClauses *cc, long target_reduc
             improvement += process_inconsistent_set(&iset, cc, &cm);
 
             if (improvement >= target_reduction)
-                return improvement;
+                goto clean_up_unit_propagate;
         }
     }
 
+clean_up_unit_propagate:
+    destroy_PreAlloc(&pre_alloc);
     return improvement;
 }
 
@@ -411,6 +445,8 @@ bool colouring_bound(struct Graph *g, struct UnweightedVtxList *P,
 {
     unsigned long long *to_colour = calloc((g->n+BITS_PER_WORD-1)/BITS_PER_WORD, sizeof *to_colour);
     unsigned long long *candidates = malloc((g->n+BITS_PER_WORD-1)/BITS_PER_WORD * sizeof *candidates);
+    int *last_clause = malloc(g->n * sizeof(*last_clause));  //last_clause[v] is the index of the last
+                                                             // clause in which v appears
 
     int max_v = 0;
     for (int i=0; i<P->size; i++)
@@ -425,14 +461,13 @@ bool colouring_bound(struct Graph *g, struct UnweightedVtxList *P,
     int v;
     long bound = 0;
 
-    long *residual_wt = malloc(g->n * sizeof *residual_wt);
     static struct ListOfClauses cc;
-    cc.size = 0;
+    init_ListOfClauses(&cc, g->n);
+
+    long *residual_wt = malloc(g->n * sizeof *residual_wt);
     for (int i=0; i<P->size; i++)
         residual_wt[P->vv[i]] = g->weight[P->vv[i]];
 
-    int last_clause[BIGNUM];  // last_clause[v] is the index of the last
-                              // clause in which v appears
     while ((v=first_set_bit(to_colour, numwords))!=-1) {
 //            numwords = v/BITS_PER_WORD+1;
         copy_bitset(to_colour, candidates, numwords);
@@ -486,7 +521,9 @@ bool colouring_bound(struct Graph *g, struct UnweightedVtxList *P,
         }
     }
 
+    free(last_clause);
     free(residual_wt);
+    destroy_ListOfClauses(&cc);
     free(to_colour);
     free(candidates);
 

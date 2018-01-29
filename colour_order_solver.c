@@ -147,8 +147,6 @@ void push_to_IntVec(struct IntVec *vec, int val)
 struct Clause {
     struct IntVec vv;
     long weight;
-//    int vv[BIGNUM];
-//    int vv_len;
     int remaining_vv_count;
     long remaining_wt;
 };

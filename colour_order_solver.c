@@ -152,8 +152,8 @@ void pop_from_IntVec(struct IntVec *vec)
 struct Clause {
     struct IntVec vv;
     long weight;
-    int remaining_vv_count;
     long remaining_wt;
+    int remaining_vv_count;
 };
 
 struct ListOfClauses {

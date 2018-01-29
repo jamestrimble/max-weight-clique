@@ -110,12 +110,6 @@ void clear_stack_without_dups(struct IntStackWithoutDups *s)
 /*******************************************************************************
 *******************************************************************************/
 
-struct IntQueue {
-    int start;
-    int size;
-    int vals[BIGNUM];
-};
-
 struct Clause {
     long weight;
     int vv[BIGNUM];
@@ -146,30 +140,6 @@ struct ClauseMembership {
     int list_len[BIGNUM];
 };
 
-void init_queue(struct IntQueue *q)
-{
-    q->start = 0;
-    q->size = 0;
-}
-
-bool queue_empty(struct IntQueue *q)
-{
-    return (q->size == 0);
-}
-
-void enqueue(struct IntQueue *q, int val)
-{
-//    assert (q->start + q->size < BIGNUM);
-    q->vals[q->start + q->size++] = val;
-}
-
-int dequeue(struct IntQueue *q)
-{
-    assert (q->size > 0);
-    q->size--;
-    return q->vals[q->start++];
-}
-
 void ClauseMembership_init(struct ClauseMembership *cm,
         int num_vertices)
 {
@@ -178,42 +148,7 @@ void ClauseMembership_init(struct ClauseMembership *cm,
 }
 
 /*******************************************************************************
-*                                     Data                                     *
 *******************************************************************************/
-
-int get_unique_remaining_vtx(struct Clause *c, int *reason) {
-    for (int i=0; i<c->vv_len; i++) {
-        int v = c->vv[i];
-        if (reason[v] == -1)
-            return v;
-    }
-
-    assert(false);   // should never reach here
-    return -1;
-}
-
-void create_inconsistent_set(struct IntStackWithoutDups *I, int c_idx,
-        struct ListOfClauses *cc, int *reason)
-{
-    struct IntQueue Q;
-    init_queue(&Q);
-    enqueue(&Q, c_idx);
-    push_without_dups(I, c_idx);
-    while(!queue_empty(&Q)) {
-        int d_idx = dequeue(&Q);
-        struct Clause *d = &cc->clause[d_idx];
-        for (int k=0; k<d->vv_len; k++) {
-            int t = d->vv[k];
-            int r = reason[t];
-            if (r != -1) {  // " removed literal l' "
-                if (!I->on_stack[r]) {
-                    enqueue(&Q, r);
-                    push_without_dups(I, r);
-                }
-            }
-        }
-    }
-}
 
 struct PreAlloc
 {
@@ -246,6 +181,43 @@ void destroy_PreAlloc(struct PreAlloc *pre_alloc)
     destroy_IntStack(&pre_alloc->S);
     destroy_IntStackWithoutDups(&pre_alloc->I);
     destroy_IntStackWithoutDups(&pre_alloc->iset);
+}
+
+/*******************************************************************************
+*******************************************************************************/
+
+int get_unique_remaining_vtx(struct Clause *c, int *reason) {
+    for (int i=0; i<c->vv_len; i++) {
+        int v = c->vv[i];
+        if (reason[v] == -1)
+            return v;
+    }
+
+    assert(false);   // should never reach here
+    return -1;
+}
+
+void create_inconsistent_set(struct PreAlloc *pre_alloc, struct Graph *g, struct IntStackWithoutDups *I,
+        int c_idx, struct ListOfClauses *cc, int *reason)
+{
+    struct IntStack *S = &pre_alloc->S;
+    clear_IntStack(S);
+    push(S, c_idx);
+    push_without_dups(I, c_idx);
+    while(S->size) {
+        int d_idx = pop(S);
+        struct Clause *d = &cc->clause[d_idx];
+        for (int k=0; k<d->vv_len; k++) {
+            int t = d->vv[k];
+            int r = reason[t];
+            if (r != -1) {  // " removed literal l' "
+                if (!I->on_stack[r]) {
+                    push(S, r);
+                    push_without_dups(I, r);
+                }
+            }
+        }
+    }
 }
 
 void unit_propagate_once(struct PreAlloc *pre_alloc, struct Graph *g, struct ListOfClauses *cc,
@@ -289,7 +261,7 @@ void unit_propagate_once(struct PreAlloc *pre_alloc, struct Graph *g, struct Lis
                             if (c->remaining_vv_count==1) {
                                 push(&pre_alloc->S, c_idx);
                             } else if (c->remaining_vv_count==0) {
-                                create_inconsistent_set(I, c_idx, cc, pre_alloc->reason);
+                                create_inconsistent_set(pre_alloc, g, I, c_idx, cc, pre_alloc->reason);
     //                            printf("\n");
                                 return;
                             }

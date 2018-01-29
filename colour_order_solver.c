@@ -141,6 +141,11 @@ void push_to_IntVec(struct IntVec *vec, int val)
     vec->vals[vec->size++] = val;
 }
 
+void pop_from_IntVec(struct IntVec *vec)
+{
+    --vec->size;
+}
+
 /*******************************************************************************
 *******************************************************************************/
 
@@ -231,6 +236,8 @@ struct PreAlloc
 
     long *residual_wt;
 
+    struct IntVec unit_clause_indices;
+
     struct IntStack S;
 
     struct IntStackWithoutDups I;
@@ -250,6 +257,7 @@ void init_PreAlloc(struct PreAlloc *pre_alloc, int n)
     pre_alloc->to_colour = malloc((n+BITS_PER_WORD-1)/BITS_PER_WORD * sizeof *pre_alloc->to_colour);
     pre_alloc->candidates = malloc((n+BITS_PER_WORD-1)/BITS_PER_WORD * sizeof *pre_alloc->candidates);
     pre_alloc->residual_wt = malloc(n * sizeof *pre_alloc->residual_wt);
+    init_IntVec(&pre_alloc->unit_clause_indices);
     init_IntStack(&pre_alloc->S, n);
     init_IntStackWithoutDups(&pre_alloc->I, n);
     init_IntStackWithoutDups(&pre_alloc->iset, n);
@@ -265,6 +273,7 @@ void destroy_PreAlloc(struct PreAlloc *pre_alloc)
     free(pre_alloc->to_colour);
     free(pre_alloc->candidates);
     free(pre_alloc->residual_wt);
+    destroy_IntVec(&pre_alloc->unit_clause_indices);
     destroy_IntStack(&pre_alloc->S);
     destroy_IntStackWithoutDups(&pre_alloc->I);
     destroy_IntStackWithoutDups(&pre_alloc->iset);
@@ -316,9 +325,12 @@ void unit_propagate_once(struct PreAlloc *pre_alloc, struct Graph *g, struct Lis
     for (int i=0; i<cc->size; i++) {
         struct Clause *clause = &cc->clause[i];
         clause->remaining_vv_count = clause->vv.size;
-        if (clause->vv.size==1 && clause->remaining_wt) {
-            push(&pre_alloc->S, i);
-        }
+    }
+
+    for (int i=0; i<pre_alloc->unit_clause_indices.size; i++) {
+        int clause_idx = pre_alloc->unit_clause_indices.vals[i];
+        if (cc->clause[clause_idx].remaining_wt)
+            push(&pre_alloc->S, clause_idx);
     }
 
     // set reason array to -1 and vertex_has_been_propagated array to 0
@@ -474,8 +486,12 @@ long unit_propagate(struct PreAlloc *pre_alloc, struct Graph *g, struct ListOfCl
         }
     }
 
-    for (int i=0; i<cc->size; i++)
+    clear_IntVec(&pre_alloc->unit_clause_indices);
+    for (int i=0; i<cc->size; i++) {
         cc->clause[i].remaining_wt = cc->clause[i].weight;
+        if (cc->clause[i].vv.size == 1)
+            push_to_IntVec(&pre_alloc->unit_clause_indices, i);
+    }
 
     long improvement = 0;
 
@@ -501,8 +517,12 @@ long unit_propagate(struct PreAlloc *pre_alloc, struct Graph *g, struct ListOfCl
             if (clause->remaining_wt == 0)
                 break;
 
+            push_to_IntVec(&pre_alloc->unit_clause_indices, i);
+
             bool found_iset = look_for_iset_using_non_unit_clause(
                     pre_alloc, g, clause, i, cc);
+
+            pop_from_IntVec(&pre_alloc->unit_clause_indices);
 
             if (!found_iset)
                 break;

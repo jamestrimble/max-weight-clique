@@ -235,6 +235,10 @@ struct PreAlloc
     // used in unit_propagate_once
     bool *vertex_has_been_propagated;
 
+    // Used in colouring_bound():
+    // last_clause[v] is the index of the last clause in which v appears
+    int *last_clause;
+
     struct IntStack S;
 
     struct IntStackWithoutDups I;
@@ -250,6 +254,7 @@ void init_PreAlloc(struct PreAlloc *pre_alloc, int n)
 {
     pre_alloc->reason = malloc(n * sizeof(*pre_alloc->reason));
     pre_alloc->vertex_has_been_propagated = malloc(n * sizeof(*pre_alloc->vertex_has_been_propagated));
+    pre_alloc->last_clause = malloc(n * sizeof(*pre_alloc->last_clause));
     init_IntStack(&pre_alloc->S, n);
     init_IntStackWithoutDups(&pre_alloc->I, n);
     init_IntStackWithoutDups(&pre_alloc->iset, n);
@@ -261,6 +266,7 @@ void destroy_PreAlloc(struct PreAlloc *pre_alloc)
 {
     free(pre_alloc->reason);
     free(pre_alloc->vertex_has_been_propagated);
+    free(pre_alloc->last_clause);
     destroy_IntStack(&pre_alloc->S);
     destroy_IntStackWithoutDups(&pre_alloc->I);
     destroy_IntStackWithoutDups(&pre_alloc->iset);
@@ -526,8 +532,6 @@ bool colouring_bound(struct PreAlloc *pre_alloc, struct Graph *g, struct Unweigh
 {
     unsigned long long *to_colour = calloc((g->n+BITS_PER_WORD-1)/BITS_PER_WORD, sizeof *to_colour);
     unsigned long long *candidates = malloc((g->n+BITS_PER_WORD-1)/BITS_PER_WORD * sizeof *candidates);
-    int *last_clause = malloc(g->n * sizeof(*last_clause));  //last_clause[v] is the index of the last
-                                                             // clause in which v appears
 
     int max_v = 0;
     for (int i=0; i<P->size; i++)
@@ -571,7 +575,7 @@ bool colouring_bound(struct PreAlloc *pre_alloc, struct Graph *g, struct Unweigh
             if (residual_wt[w] > 0) {
                 set_bit(to_colour, w);
             } else {
-                last_clause[w] = pre_alloc->cc.size;
+                pre_alloc->last_clause[w] = pre_alloc->cc.size;
             }
         }
         bound += class_min_wt;
@@ -593,7 +597,7 @@ bool colouring_bound(struct PreAlloc *pre_alloc, struct Graph *g, struct Unweigh
     //            printf("%ld\n", bound);
             for (int j=0; j<clause->vv.size; j++) {
                 int w = clause->vv.vals[j];
-                if (last_clause[w] == i) {
+                if (pre_alloc->last_clause[w] == i) {
                     cumulative_wt_bound[P->size] = bound;
                     P->vv[P->size++] = w;
                 }
@@ -601,7 +605,6 @@ bool colouring_bound(struct PreAlloc *pre_alloc, struct Graph *g, struct Unweigh
         }
     }
 
-    free(last_clause);
     free(residual_wt);
     free(to_colour);
     free(candidates);

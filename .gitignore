@@ -1,4 +1,5 @@
 colour_order
+colour_order_debug
 russian_dolls
 *.o
 *.swp

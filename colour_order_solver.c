@@ -8,12 +8,144 @@
 #include "vertex_ordering.h"
 #include "util.h"
 #include "colour_order_solver.h"
-#include "data.h"
 
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+/*******************************************************************************
+*                                     Data                                     *
+*******************************************************************************/
+
+#define BIGNUM 2000
+
+struct IntStack {
+    int size;
+    int vals[BIGNUM];
+};
+
+struct IntStackWithoutDups {
+    int size;
+    int vals[BIGNUM];
+    bool on_stack[BIGNUM];
+};
+
+struct IntQueue {
+    int start;
+    int size;
+    int vals[BIGNUM];
+};
+
+struct Clause {
+    long weight;
+    int vv[BIGNUM];
+    int vv_len;
+    int remaining_vv_count;
+    long remaining_wt;
+};
+
+
+struct ListOfClauses {
+    struct Clause clause[BIGNUM];
+    int size;
+};
+
+// Which clauses does each vertex belong to?
+struct ClauseMembership {
+    int list[BIGNUM][BIGNUM];
+    int list_len[BIGNUM];
+};
+
+void init_stack(struct IntStack *s)
+{
+    s->size = 0;
+}
+
+void push(struct IntStack *s, int val)
+{
+    if (s->size == BIGNUM)
+        exit(1);
+    s->vals[s->size++] = val;
+}
+
+int pop(struct IntStack *s)
+{
+    if (s->size == 0)
+        exit(1);
+    return s->vals[--s->size];
+}
+
+void init_stack_without_dups(struct IntStackWithoutDups *s,
+        int max_member_val)
+{
+    s->size = 0;
+    for (int i=0; i<max_member_val; i++)
+        s->on_stack[i] = false;
+}
+
+void push_without_dups(struct IntStackWithoutDups *s, int val)
+{
+    if (!s->on_stack[val]) {
+        if (s->size == BIGNUM)
+            exit(1);
+        s->vals[s->size++] = val;
+        s->on_stack[val] = true;
+    }
+}
+
+int pop_without_dups(struct IntStackWithoutDups *s)
+{
+    if (s->size == 0)
+        exit(1);
+    int val = s->vals[--s->size];
+    s->on_stack[val] = false;
+    return val;
+}
+
+void clear_stack_without_dups(struct IntStackWithoutDups *s)
+{
+    for (int i=0; i<s->size; i++)
+        s->on_stack[s->vals[i]] = false;
+    s->size = 0;
+}
+
+void init_queue(struct IntQueue *q)
+{
+    q->start = 0;
+    q->size = 0;
+}
+
+bool queue_empty(struct IntQueue *q)
+{
+    return (q->size == 0);
+}
+
+void enqueue(struct IntQueue *q, int val)
+{
+    if (q->start + q->size == BIGNUM)
+        exit(1);
+    q->vals[q->start + q->size++] = val;
+}
+
+int dequeue(struct IntQueue *q)
+{
+    if (q->size == 0)
+        exit(1);
+    q->size--;
+    return q->vals[q->start++];
+}
+
+void ClauseMembership_init(struct ClauseMembership *cm,
+        int num_vertices)
+{
+    for (int i=0; i<num_vertices; i++)
+        cm->list_len[i] = 0;
+}
+
+/*******************************************************************************
+*                                     Data                                     *
+*******************************************************************************/
 
 int get_unique_remaining_vtx(struct Clause *c, int *reason) {
     for (int i=0; i<c->vv_len; i++) {
@@ -217,7 +349,7 @@ long unit_propagate(struct Graph *g, struct ListOfClauses *cc, long target_reduc
         return 0;
 
     static struct ClauseMembership cm;
-    fast_ClauseMembership_init(&cm, g->n);
+    ClauseMembership_init(&cm, g->n);
     for (int i=0; i<cc->size; i++) {
         struct Clause *clause = &cc->clause[i];
         for (int j=0; j<clause->vv_len; j++) {
@@ -229,7 +361,7 @@ long unit_propagate(struct Graph *g, struct ListOfClauses *cc, long target_reduc
         cc->clause[i].remaining_wt = cc->clause[i].weight;
 
     struct IntStackWithoutDups I;
-    fast_init_stack_without_dups(&I, cc->size);
+    init_stack_without_dups(&I, cc->size);
 
     long improvement = 0;
 
@@ -254,7 +386,7 @@ long unit_propagate(struct Graph *g, struct ListOfClauses *cc, long target_reduc
 //    printf("\n");
 //
     struct IntStackWithoutDups iset;
-    fast_init_stack_without_dups(&iset, cc->size);
+    init_stack_without_dups(&iset, cc->size);
     for (int i=0; i<cc->size; i++) {
         struct Clause *clause = &cc->clause[i];
         for (;;) {

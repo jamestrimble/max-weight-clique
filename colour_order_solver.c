@@ -212,18 +212,6 @@ void destroy_ClauseMembership(struct ClauseMembership *cm)
     free(cm->vtx_to_clauses);
 }
 
-//struct ClauseMembership {
-//    int list[BIGNUM][BIGNUM];
-//    int list_len[BIGNUM];
-//};
-//
-//void ClauseMembership_init(struct ClauseMembership *cm,
-//        int num_vertices)
-//{
-//    for (int i=0; i<num_vertices; i++)
-//        cm->list_len[i] = 0;
-//}
-
 /*******************************************************************************
 *******************************************************************************/
 
@@ -334,8 +322,6 @@ void unit_propagate_once(struct PreAlloc *pre_alloc, struct Graph *g, struct Lis
             push(&pre_alloc->S, i);
         }
     }
-//    INSERTION_SORT(int, S.vals, S.size,
-//            (cc->clause[S.vals[j-1]].weight > cc->clause[S.vals[j]].weight))
 
     for (int i=0; i<g->n; i++) {
         pre_alloc->reason[i] = -1;
@@ -343,13 +329,11 @@ void unit_propagate_once(struct PreAlloc *pre_alloc, struct Graph *g, struct Lis
     }
 
     while (pre_alloc->S.size) {
-        //printf("S.size %d\n", S.size);
         int u_idx = pop(&pre_alloc->S);
         struct Clause *u = &cc->clause[u_idx];
         assert (u->remaining_vv_count == 1);
         int v = get_unique_remaining_vtx(u, pre_alloc->reason);
         if (!pre_alloc->vertex_has_been_propagated[v]) {
-//            printf("%d ", v);
             //TODO: think about the next commented-out line. Should it be included???
             //reason[v] = u_idx;
             for (int i=0; i<g->nonadjlists[v].size; i++) {
@@ -365,7 +349,6 @@ void unit_propagate_once(struct PreAlloc *pre_alloc, struct Graph *g, struct Lis
                                 push(&pre_alloc->S, c_idx);
                             } else if (c->remaining_vv_count==0) {
                                 create_inconsistent_set(pre_alloc, g, I, c_idx, cc, pre_alloc->reason);
-    //                            printf("\n");
                                 return;
                             }
                         }
@@ -375,7 +358,6 @@ void unit_propagate_once(struct PreAlloc *pre_alloc, struct Graph *g, struct Lis
         }
         pre_alloc->vertex_has_been_propagated[v] = true;
     }
-//    printf("\n");
 }
 
 void remove_from_clause_membership(int v, int clause_idx, struct ClauseMembership *cm)
@@ -483,8 +465,6 @@ long unit_propagate(struct PreAlloc *pre_alloc, struct Graph *g, struct ListOfCl
     if (target_reduction <= 0)
         return 0;
 
-//    static struct ClauseMembership cm;
-//    ClauseMembership_init(&cm, g->n);
     for (int v=0; v<g->n; v++)
         clear_IntVec(&pre_alloc->cm.vtx_to_clauses[v]);
 
@@ -564,7 +544,6 @@ bool colouring_bound(struct PreAlloc *pre_alloc, struct Graph *g, struct Unweigh
     clear_ListOfClauses(&pre_alloc->cc);
 
     while ((v=first_set_bit(pre_alloc->to_colour, numwords))!=-1) {
-//            numwords = v/BITS_PER_WORD+1;
         copy_bitset(pre_alloc->to_colour, pre_alloc->candidates, numwords);
         long class_min_wt = pre_alloc->residual_wt[v];
         unset_bit(pre_alloc->to_colour, v);
@@ -605,7 +584,6 @@ bool colouring_bound(struct PreAlloc *pre_alloc, struct Graph *g, struct Unweigh
             struct Clause *clause = &pre_alloc->cc.clause[i];
             assert (clause->weight >= 0);
             bound += clause->weight;
-    //            printf("%ld\n", bound);
             for (int j=0; j<clause->vv.size; j++) {
                 int w = clause->vv.vals[j];
                 if (pre_alloc->last_clause[w] == i) {

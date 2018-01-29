@@ -3,22 +3,27 @@
 
 #include <limits.h>
 #include <stdbool.h>
+#include <stdlib.h>
 
 #define BYTES_PER_WORD sizeof(unsigned long long)
 #define BITS_PER_WORD (CHAR_BIT * BYTES_PER_WORD)
 
-//TODO: don't define this separately in two headers
-//TODO: or better yet, don't used fixed-size arrays
-#define BIGNUM 2000
+struct IntArray
+{
+    int *vals;
+    int size;
+};
 
-struct Graph {
+void destroy_IntArray(struct IntArray *vec);
+
+struct Graph
+{
     int n;
     int *degree;
     long *weighted_deg;
     long *weight;
     bool **adjmat;
-    int nonadjlist[BIGNUM][BIGNUM];
-    int nonadjlist_len[BIGNUM];
+    struct IntArray *nonadjlists;
     unsigned long long **bit_complement_nd;
 };
 

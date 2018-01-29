@@ -209,8 +209,8 @@ void unit_propagate_once(struct Graph *g, struct ListOfClauses *cc,
 //            printf("%d ", v);
             //TODO: think about the next commented-out line. Should it be included???
             //reason[v] = u_idx;
-            for (int i=0; i<g->nonadjlist_len[v]; i++) {
-                int w = g->nonadjlist[v][i];
+            for (int i=0; i<g->nonadjlists[v].size; i++) {
+                int w = g->nonadjlists[v].vals[i];
                 if (cm->list_len[w]) {
                     if (reason[w] == -1) {
                         reason[w] = u_idx;
@@ -552,12 +552,12 @@ void mc(struct Graph* g, long *expand_call_count,
     // check they're correct
     calculate_all_degrees(ordered_graph);
     for (int i=0; i<ordered_graph->n; i++) {
-        if (ordered_graph->nonadjlist_len[i] != ordered_graph->n - 1 - ordered_graph->degree[i])
+        if (ordered_graph->nonadjlists[i].size != ordered_graph->n - 1 - ordered_graph->degree[i])
             fail("Incorrect nonadj list length");
-        for (int j=0; j<ordered_graph->nonadjlist_len[i]; j++) {
-            if (ordered_graph->adjmat[i][ordered_graph->nonadjlist[i][j]])
+        for (int j=0; j<ordered_graph->nonadjlists[i].size; j++) {
+            if (ordered_graph->adjmat[i][ordered_graph->nonadjlists[i].vals[j]])
                 fail("Unexpected edge");
-            if (ordered_graph->adjmat[ordered_graph->nonadjlist[i][j]][i])
+            if (ordered_graph->adjmat[ordered_graph->nonadjlists[i].vals[j]][i])
                 fail("Unexpected edge");
         }
     }

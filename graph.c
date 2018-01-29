@@ -8,6 +8,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+void destroy_IntArray(struct IntArray *vec)
+{
+    if (vec->size)
+        free(vec->vals);
+}
+
 void add_edge(struct Graph *g, int v, int w) {
     g->adjmat[v][w] = true;
     g->adjmat[w][v] = true;
@@ -33,10 +39,19 @@ void populate_bit_complement_nd(struct Graph *g) {
 void make_nonadjlists(struct Graph *g)
 {
     for (int i=0; i<g->n; i++) {
-        g->nonadjlist_len[i] = 0;
+        g->nonadjlists[i].size = 0;
         for (int j=0; j<g->n; j++) {
             if (i!=j && !g->adjmat[i][j]) {
-                g->nonadjlist[i][g->nonadjlist_len[i]++] = j;
+                ++g->nonadjlists[i].size;
+            }
+        }
+    }
+    for (int i=0; i<g->n; i++) {
+        g->nonadjlists[i].vals = calloc(g->nonadjlists[i].size, sizeof(int));
+        int k = 0;
+        for (int j=0; j<g->n; j++) {
+            if (i!=j && !g->adjmat[i][j]) {
+                g->nonadjlists[i].vals[k++] = j;
             }
         }
     }
@@ -65,6 +80,7 @@ struct Graph *new_graph(int n)
     g->weight = calloc(n, sizeof(*g->weight));
     g->weighted_deg = calloc(n, sizeof(*g->weighted_deg));
     g->adjmat = calloc(n, sizeof(*g->adjmat));
+    g->nonadjlists = calloc(n, sizeof(struct IntArray));
     g->bit_complement_nd = calloc(n, sizeof(*g->bit_complement_nd));
     for (int i=0; i<n; i++) {
         g->adjmat[i] = calloc(n, sizeof *g->adjmat[i]);
@@ -77,12 +93,14 @@ void free_graph(struct Graph *g)
 {
     for (int i=0; i<g->n; i++) {
         free(g->adjmat[i]);
+        destroy_IntArray(&g->nonadjlists[i]);
         free(g->bit_complement_nd[i]);
     }
     free(g->degree);
     free(g->weighted_deg);
     free(g->weight);
     free(g->adjmat);
+    free(g->nonadjlists);
     free(g->bit_complement_nd);
     free(g);
 }

@@ -321,10 +321,10 @@ void unit_propagate_once(struct PreAlloc *pre_alloc, struct Graph *g, struct Lis
         }
     }
 
-    for (int i=0; i<g->n; i++) {
-        pre_alloc->reason[i] = -1;
-        pre_alloc->vertex_has_been_propagated[i] = false;
-    }
+    // set reason array to -1 and vertex_has_been_propagated array to 0
+    _Static_assert(-1==~0, "Unable to set an array of ints to -1 using memset");
+    memset(pre_alloc->reason, -1, g->n * sizeof(int));
+    memset(pre_alloc->vertex_has_been_propagated, 0, g->n * sizeof(bool));
 
     while (pre_alloc->S.size) {
         int u_idx = pop(&pre_alloc->S);

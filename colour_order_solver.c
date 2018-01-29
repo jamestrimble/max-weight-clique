@@ -110,6 +110,9 @@ void clear_stack_without_dups(struct IntStackWithoutDups *s)
 /*******************************************************************************
 *******************************************************************************/
 
+//struct IntVec
+//{
+//};
 struct Clause {
     long weight;
     int vv[BIGNUM];
@@ -121,18 +124,23 @@ struct Clause {
 struct ListOfClauses {
     struct Clause *clause;
     int size;
+//    int capacity;
 };
 
 void init_ListOfClauses(struct ListOfClauses *l, int n)
 {
     l->clause = malloc(n * sizeof(*l->clause));
     l->size = 0;
+//    l->capacity = n;
 }
 
 void destroy_ListOfClauses(struct ListOfClauses *l)
 {
     free(l->clause);
 }
+
+/*******************************************************************************
+*******************************************************************************/
 
 // Which clauses does each vertex belong to?
 struct ClauseMembership {
@@ -376,7 +384,7 @@ long process_inconsistent_set(
     return min_wt;
 }
 
-long unit_propagate(struct Graph *g, struct ListOfClauses *cc, long target_reduction)
+long unit_propagate(struct PreAlloc *pre_alloc, struct Graph *g, struct ListOfClauses *cc, long target_reduction)
 {
     if (target_reduction <= 0)
         return 0;
@@ -393,22 +401,19 @@ long unit_propagate(struct Graph *g, struct ListOfClauses *cc, long target_reduc
     for (int i=0; i<cc->size; i++)
         cc->clause[i].remaining_wt = cc->clause[i].weight;
 
-    struct PreAlloc pre_alloc;
-    init_PreAlloc(&pre_alloc, g->n);
-
     long improvement = 0;
 
     for (;;) {
-        clear_stack_without_dups(&pre_alloc.I);
-        unit_propagate_once(&pre_alloc, g, cc, &cm, &pre_alloc.I);
+        clear_stack_without_dups(&pre_alloc->I);
+        unit_propagate_once(pre_alloc, g, cc, &cm, &pre_alloc->I);
 
-        if (pre_alloc.I.size==0)
+        if (pre_alloc->I.size==0)
             break;
 
-        improvement += process_inconsistent_set(&pre_alloc.I, cc, &cm);
+        improvement += process_inconsistent_set(&pre_alloc->I, cc, &cm);
 
         if (improvement >= target_reduction)
-            goto clean_up_unit_propagate;
+            return improvement;
     }
 
 //    for (int i=0; i<cc->size; i++) {
@@ -428,24 +433,22 @@ long unit_propagate(struct Graph *g, struct ListOfClauses *cc, long target_reduc
                 break;
 
             bool found_iset = look_for_iset_using_non_unit_clause(
-                    &pre_alloc, g, clause, i, cc, &cm);
+                    pre_alloc, g, clause, i, cc, &cm);
 
             if (!found_iset)
                 break;
 
-            improvement += process_inconsistent_set(&pre_alloc.iset, cc, &cm);
+            improvement += process_inconsistent_set(&pre_alloc->iset, cc, &cm);
 
             if (improvement >= target_reduction)
-                goto clean_up_unit_propagate;
+                return improvement;
         }
     }
 
-clean_up_unit_propagate:
-    destroy_PreAlloc(&pre_alloc);
     return improvement;
 }
 
-bool colouring_bound(struct Graph *g, struct UnweightedVtxList *P,
+bool colouring_bound(struct PreAlloc *pre_alloc, struct Graph *g, struct UnweightedVtxList *P,
         long *cumulative_wt_bound, long target)
 {
     unsigned long long *to_colour = calloc((g->n+BITS_PER_WORD-1)/BITS_PER_WORD, sizeof *to_colour);
@@ -504,7 +507,7 @@ bool colouring_bound(struct Graph *g, struct UnweightedVtxList *P,
         cc.size++;
     }
 
-    long improvement = unit_propagate(g, &cc, bound-target);
+    long improvement = unit_propagate(pre_alloc, g, &cc, bound-target);
 
     bool proved_we_can_prune = bound-improvement <= target;
 
@@ -535,7 +538,7 @@ bool colouring_bound(struct Graph *g, struct UnweightedVtxList *P,
     return !proved_we_can_prune;
 }
 
-void expand(struct Graph *g, struct VtxList *C, struct UnweightedVtxList *P,
+void expand(struct PreAlloc *pre_alloc, struct Graph *g, struct VtxList *C, struct UnweightedVtxList *P,
         struct VtxList *incumbent, int level, long *expand_call_count,
         bool quiet)
 {
@@ -552,7 +555,7 @@ void expand(struct Graph *g, struct VtxList *C, struct UnweightedVtxList *P,
 
     long *cumulative_wt_bound = malloc(g->n * sizeof *cumulative_wt_bound);
 
-    if (colouring_bound(g, P, cumulative_wt_bound, incumbent->total_wt - C->total_wt)) {
+    if (colouring_bound(pre_alloc, g, P, cumulative_wt_bound, incumbent->total_wt - C->total_wt)) {
         struct UnweightedVtxList new_P;
         init_UnweightedVtxList(&new_P, g->n);
 
@@ -568,7 +571,7 @@ void expand(struct Graph *g, struct VtxList *C, struct UnweightedVtxList *P,
             }
 
             vtxlist_push_vtx(g, C, v);
-            expand(g, C, &new_P, incumbent, level+1, expand_call_count, quiet);
+            expand(pre_alloc, g, C, &new_P, incumbent, level+1, expand_call_count, quiet);
             vtxlist_pop_vtx(g, C);
         }
 
@@ -610,7 +613,14 @@ void mc(struct Graph* g, long *expand_call_count,
     for (int v=0; v<g->n; v++) P.vv[P.size++] = v;
     struct VtxList C;
     init_VtxList(&C, ordered_graph->n);
-    expand(ordered_graph, &C, &P, incumbent, 0, expand_call_count, quiet);
+
+    struct PreAlloc pre_alloc;
+    init_PreAlloc(&pre_alloc, g->n);
+
+    expand(&pre_alloc, ordered_graph, &C, &P, incumbent, 0, expand_call_count, quiet);
+
+    destroy_PreAlloc(&pre_alloc);
+
     destroy_VtxList(&C);
     destroy_UnweightedVtxList(&P);
 

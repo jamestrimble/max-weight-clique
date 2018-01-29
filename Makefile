@@ -10,4 +10,4 @@ colour_order_debug: colour_order.c colour_order_solver.c colour_order_solver.h $
 	gcc -O3 -march=native -Wall -std=c11 -o colour_order_debug colour_order.c colour_order_solver.c $(SHARED_C)
 
 clean:
-	rm colour_order colour_order_debug
+	rm colour_order colour_order_debug *.gcov *.gcda *.gcno

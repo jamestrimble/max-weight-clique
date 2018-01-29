@@ -9,6 +9,7 @@
 #include "util.h"
 #include "colour_order_solver.h"
 
+#include <assert.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -64,15 +65,13 @@ void init_stack(struct IntStack *s)
 
 void push(struct IntStack *s, int val)
 {
-    if (s->size == BIGNUM)
-        exit(1);
+    assert (s->size < BIGNUM);
     s->vals[s->size++] = val;
 }
 
 int pop(struct IntStack *s)
 {
-    if (s->size == 0)
-        exit(1);
+    assert (s->size != 0);
     return s->vals[--s->size];
 }
 
@@ -87,8 +86,7 @@ void init_stack_without_dups(struct IntStackWithoutDups *s,
 void push_without_dups(struct IntStackWithoutDups *s, int val)
 {
     if (!s->on_stack[val]) {
-        if (s->size == BIGNUM)
-            exit(1);
+        assert (s->size < BIGNUM);
         s->vals[s->size++] = val;
         s->on_stack[val] = true;
     }
@@ -96,8 +94,7 @@ void push_without_dups(struct IntStackWithoutDups *s, int val)
 
 int pop_without_dups(struct IntStackWithoutDups *s)
 {
-    if (s->size == 0)
-        exit(1);
+    assert (s->size != 0);
     int val = s->vals[--s->size];
     s->on_stack[val] = false;
     return val;
@@ -123,15 +120,13 @@ bool queue_empty(struct IntQueue *q)
 
 void enqueue(struct IntQueue *q, int val)
 {
-    if (q->start + q->size == BIGNUM)
-        exit(1);
+    assert (q->start + q->size < BIGNUM);
     q->vals[q->start + q->size++] = val;
 }
 
 int dequeue(struct IntQueue *q)
 {
-    if (q->size == 0)
-        exit(1);
+    assert (q->size > 0);
     q->size--;
     return q->vals[q->start++];
 }
@@ -154,7 +149,7 @@ int get_unique_remaining_vtx(struct Clause *c, int *reason) {
             return v;
     }
 
-//    fail("Shouldn't have reache30 here in get_unique_remaining_vtx");
+    assert(false);   // should never reach here
     return -1;
 }
 
@@ -208,8 +203,7 @@ void unit_propagate_once(struct Graph *g, struct ListOfClauses *cc,
         //printf("S.size %d\n", S.size);
         int u_idx = pop(&S);
         struct Clause *u = &cc->clause[u_idx];
-//        if (u->remaining_vv_count != 1)
-//            fail("Unexpected remaining_vv_count");
+        assert (u->remaining_vv_count == 1);
         int v = get_unique_remaining_vtx(u, reason);
         if (!vertex_has_been_propagated[v]) {
 //            printf("%d ", v);
@@ -251,7 +245,7 @@ void remove_from_clause_membership(int v, int clause_idx, struct ClauseMembershi
             return;
         }
     }
-    fail("fell off the end of remove_from_clause_membership\n");
+    assert(false);
 }
 
 void fake_length_one_clause(struct Clause *clause, int clause_idx, int vtx_pos,
@@ -479,8 +473,7 @@ bool colouring_bound(struct Graph *g, struct UnweightedVtxList *P,
         bound = 0;
         for (int i=0; i<cc.size; i++) {
             struct Clause *clause = &cc.clause[i];
-            if (clause->weight < 0)
-                fail("Unexpectedly low clause weight");
+            assert (clause->weight >= 0);
             bound += clause->weight;
     //            printf("%ld\n", bound);
             for (int j=0; j<clause->vv_len; j++) {

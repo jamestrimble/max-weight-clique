@@ -1,9 +1,15 @@
 #ifndef BITSET_H
 #define BITSET_H
 
+bool test_bit(unsigned long long *bitset, int bit);
+
 void set_bit(unsigned long long *bitset, int bit);
 
 void unset_bit(unsigned long long *bitset, int bit);
+
+int bitset_popcount(unsigned long long *bitset, int num_words);
+
+bool bitset_empty(unsigned long long *bitset, int num_words);
 
 int last_set_bit(unsigned long long *bitset, int num_words);
 

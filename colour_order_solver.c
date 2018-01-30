@@ -234,7 +234,13 @@ struct PreAlloc
 
     unsigned long long *candidates;
 
+    unsigned long long *tmp_bitset;
+
     long *residual_wt;
+
+    int *sorted_vv;
+
+    int *dynamic_antideg;
 
     struct IntVec unit_clause_indices;
 
@@ -256,7 +262,10 @@ void init_PreAlloc(struct PreAlloc *pre_alloc, int n)
     pre_alloc->last_clause = malloc(n * sizeof(*pre_alloc->last_clause));
     pre_alloc->to_colour = malloc((n+BITS_PER_WORD-1)/BITS_PER_WORD * sizeof *pre_alloc->to_colour);
     pre_alloc->candidates = malloc((n+BITS_PER_WORD-1)/BITS_PER_WORD * sizeof *pre_alloc->candidates);
+    pre_alloc->tmp_bitset = malloc((n+BITS_PER_WORD-1)/BITS_PER_WORD * sizeof *pre_alloc->tmp_bitset);
     pre_alloc->residual_wt = malloc(n * sizeof *pre_alloc->residual_wt);
+    pre_alloc->sorted_vv = malloc(n * sizeof *pre_alloc->sorted_vv);
+    pre_alloc->dynamic_antideg = malloc(n * sizeof *pre_alloc->dynamic_antideg);
     init_IntVec(&pre_alloc->unit_clause_indices);
     init_IntStack(&pre_alloc->S, n);
     init_IntStackWithoutDups(&pre_alloc->I, n);
@@ -272,7 +281,10 @@ void destroy_PreAlloc(struct PreAlloc *pre_alloc)
     free(pre_alloc->last_clause);
     free(pre_alloc->to_colour);
     free(pre_alloc->candidates);
+    free(pre_alloc->tmp_bitset);
     free(pre_alloc->residual_wt);
+    free(pre_alloc->sorted_vv);
+    free(pre_alloc->dynamic_antideg);
     destroy_IntVec(&pre_alloc->unit_clause_indices);
     destroy_IntStack(&pre_alloc->S);
     destroy_IntStackWithoutDups(&pre_alloc->I);
@@ -537,30 +549,82 @@ long unit_propagate(struct PreAlloc *pre_alloc, struct Graph *g, struct ListOfCl
     return improvement;
 }
 
-bool colouring_bound(struct PreAlloc *pre_alloc, struct Graph *g, struct UnweightedVtxList *P,
-        long *cumulative_wt_bound, long target)
+int choose_best_v(struct PreAlloc *pre_alloc, unsigned long long *candidates,
+        int *dynamic_antideg, int numwords)
 {
-    for (int i=(g->n+BITS_PER_WORD-1)/BITS_PER_WORD; i--; )
-        pre_alloc->to_colour[i] = 0;
-
-    int max_v = 0;
-    for (int i=0; i<P->size; i++)
-        if (P->vv[i] > max_v)
-            max_v = P->vv[i];
-
-    int numwords = max_v/BITS_PER_WORD+1;
-
-    for (int i=0; i<P->size; i++)
-        set_bit(pre_alloc->to_colour, P->vv[i]);
-
+    copy_bitset(candidates, pre_alloc->tmp_bitset, numwords);
+    int best_score = INT_MAX;
+    int best_v = -1;
     int v;
+    while (-1 != (v = first_set_bit(pre_alloc->tmp_bitset, numwords))) {
+        int score = pre_alloc->dynamic_antideg[v];
+        if (score < best_score) {
+            best_v = v;
+            best_score = score;
+        }
+        unset_bit(pre_alloc->tmp_bitset, v);
+    }
+    return best_v;
+}
+
+long do_colouring_with_reordering(struct PreAlloc *pre_alloc, struct Graph *g,
+        struct UnweightedVtxList *P, int numwords)
+{
     long bound = 0;
 
-    for (int i=0; i<P->size; i++)
-        pre_alloc->residual_wt[P->vv[i]] = g->weight[P->vv[i]];
+    for (int i=0; i<P->size; i++) {
+        int v = P->vv[i];
+        pre_alloc->sorted_vv[i] = v;
+        copy_bitset(pre_alloc->to_colour, pre_alloc->tmp_bitset, numwords);
+        bitset_intersect_with(pre_alloc->tmp_bitset, g->bit_complement_nd[v], numwords);
+        pre_alloc->dynamic_antideg[v] = bitset_popcount(pre_alloc->tmp_bitset, numwords);
+    }
+    INSERTION_SORT(int, pre_alloc->sorted_vv, P->size,
+            (pre_alloc->dynamic_antideg[pre_alloc->sorted_vv[j-1]] > pre_alloc->dynamic_antideg[pre_alloc->sorted_vv[j]]));
 
-    clear_ListOfClauses(&pre_alloc->cc);
+    int k = 0;
+    while (!bitset_empty(pre_alloc->to_colour, numwords)) {
+        int v;
+        while (!test_bit(pre_alloc->to_colour, (v=pre_alloc->sorted_vv[k]))) {
+            ++k;
+        }
 
+        copy_bitset(pre_alloc->to_colour, pre_alloc->candidates, numwords);
+        long class_min_wt = pre_alloc->residual_wt[v];
+        unset_bit(pre_alloc->to_colour, v);
+        struct Clause *clause = &pre_alloc->cc.clause[pre_alloc->cc.size];
+        clause->vv.size = 0;
+        push_to_IntVec(&clause->vv, v);
+        bitset_intersect_with(pre_alloc->candidates, g->bit_complement_nd[v], numwords);
+        while (-1 != (v = choose_best_v(pre_alloc, pre_alloc->candidates, pre_alloc->dynamic_antideg, numwords))) {
+            if (pre_alloc->residual_wt[v] < class_min_wt)
+                class_min_wt = pre_alloc->residual_wt[v];
+            unset_bit(pre_alloc->to_colour, v);
+            push_to_IntVec(&clause->vv, v);
+            bitset_intersect_with(pre_alloc->candidates, g->bit_complement_nd[v], numwords);
+        }
+//            printf("%ld\n", class_min_wt);
+        for (int i=0; i<clause->vv.size; i++) {
+            int w = clause->vv.vals[i];
+            pre_alloc->residual_wt[w] -= class_min_wt;
+            if (pre_alloc->residual_wt[w] > 0) {
+                set_bit(pre_alloc->to_colour, w);
+            } else {
+                pre_alloc->last_clause[w] = pre_alloc->cc.size;
+            }
+        }
+        bound += class_min_wt;
+        clause->weight = class_min_wt;
+        pre_alloc->cc.size++;
+    }
+    return bound;
+}
+
+long do_colouring_without_reordering(struct PreAlloc *pre_alloc, struct Graph *g,
+        struct UnweightedVtxList *P, int numwords)
+{
+    long bound = 0;
+    int v;
     while ((v=first_set_bit(pre_alloc->to_colour, numwords))!=-1) {
         copy_bitset(pre_alloc->to_colour, pre_alloc->candidates, numwords);
         long class_min_wt = pre_alloc->residual_wt[v];
@@ -590,6 +654,33 @@ bool colouring_bound(struct PreAlloc *pre_alloc, struct Graph *g, struct Unweigh
         clause->weight = class_min_wt;
         pre_alloc->cc.size++;
     }
+    return bound;
+}
+
+bool colouring_bound(struct PreAlloc *pre_alloc, struct Graph *g, struct UnweightedVtxList *P,
+        long *cumulative_wt_bound, long target, bool use_reordering)
+{
+    for (int i=(g->n+BITS_PER_WORD-1)/BITS_PER_WORD; i--; )
+        pre_alloc->to_colour[i] = 0;
+
+    int max_v = 0;
+    for (int i=0; i<P->size; i++)
+        if (P->vv[i] > max_v)
+            max_v = P->vv[i];
+
+    int numwords = max_v/BITS_PER_WORD+1;
+
+    for (int i=0; i<P->size; i++)
+        set_bit(pre_alloc->to_colour, P->vv[i]);
+
+    for (int i=0; i<P->size; i++)
+        pre_alloc->residual_wt[P->vv[i]] = g->weight[P->vv[i]];
+
+    clear_ListOfClauses(&pre_alloc->cc);
+
+    long bound = use_reordering ?
+            do_colouring_with_reordering(pre_alloc, g, P, numwords) :
+            do_colouring_without_reordering(pre_alloc, g, P, numwords);
 
     long improvement = unit_propagate(pre_alloc, g, &pre_alloc->cc, bound-target);
 
@@ -617,7 +708,7 @@ bool colouring_bound(struct PreAlloc *pre_alloc, struct Graph *g, struct Unweigh
 
 void expand(struct PreAlloc *pre_alloc, struct Graph *g, struct VtxList *C, struct UnweightedVtxList *P,
         struct VtxList *incumbent, int level, long *expand_call_count,
-        bool quiet)
+        bool quiet, bool use_reordering)
 {
     (*expand_call_count)++;
     if (*expand_call_count % 100000 == 0)
@@ -632,7 +723,7 @@ void expand(struct PreAlloc *pre_alloc, struct Graph *g, struct VtxList *C, stru
 
     long *cumulative_wt_bound = malloc(g->n * sizeof *cumulative_wt_bound);
 
-    if (colouring_bound(pre_alloc, g, P, cumulative_wt_bound, incumbent->total_wt - C->total_wt)) {
+    if (colouring_bound(pre_alloc, g, P, cumulative_wt_bound, incumbent->total_wt - C->total_wt, use_reordering)) {
         struct UnweightedVtxList new_P;
         init_UnweightedVtxList(&new_P, g->n);
 
@@ -648,7 +739,7 @@ void expand(struct PreAlloc *pre_alloc, struct Graph *g, struct VtxList *C, stru
             }
 
             vtxlist_push_vtx(g, C, v);
-            expand(pre_alloc, g, C, &new_P, incumbent, level+1, expand_call_count, quiet);
+            expand(pre_alloc, g, C, &new_P, incumbent, level+1, expand_call_count, quiet, use_reordering);
             vtxlist_pop_vtx(g, C);
         }
 
@@ -659,7 +750,7 @@ void expand(struct PreAlloc *pre_alloc, struct Graph *g, struct VtxList *C, stru
 }
 
 void mc(struct Graph* g, long *expand_call_count,
-        bool quiet, int vtx_ordering, struct VtxList *incumbent)
+        bool quiet, int vtx_ordering, bool use_reordering, struct VtxList *incumbent)
 {
     calculate_all_degrees(g);
 
@@ -694,7 +785,7 @@ void mc(struct Graph* g, long *expand_call_count,
     struct PreAlloc pre_alloc;
     init_PreAlloc(&pre_alloc, g->n);
 
-    expand(&pre_alloc, ordered_graph, &C, &P, incumbent, 0, expand_call_count, quiet);
+    expand(&pre_alloc, ordered_graph, &C, &P, incumbent, 0, expand_call_count, quiet, use_reordering);
 
     destroy_PreAlloc(&pre_alloc);
 

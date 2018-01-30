@@ -3,6 +3,11 @@
 
 #include "graph.h" 
 
+bool test_bit(unsigned long long *bitset, int bit)
+{
+    return 0 != (bitset[bit/BITS_PER_WORD] & (1ull << (bit%BITS_PER_WORD)));
+}
+
 void set_bit(unsigned long long *bitset, int bit)
 {
     bitset[bit/BITS_PER_WORD] |= (1ull << (bit%BITS_PER_WORD));
@@ -11,6 +16,22 @@ void set_bit(unsigned long long *bitset, int bit)
 void unset_bit(unsigned long long *bitset, int bit)
 {
     bitset[bit/BITS_PER_WORD] &= ~(1ull << (bit%BITS_PER_WORD));
+}
+
+int bitset_popcount(unsigned long long *bitset, int num_words)
+{
+    int count = 0;
+    for (int i=0; i<num_words; i++)
+        count += __builtin_popcountll(bitset[i]);
+    return count;
+}
+
+bool bitset_empty(unsigned long long *bitset, int num_words)
+{
+    for (int i=0; i<num_words; i++)
+        if (bitset[i] != 0)
+            return false;
+    return true;
 }
 
 int last_set_bit(unsigned long long *bitset, int num_words)

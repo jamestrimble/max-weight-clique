@@ -1,5 +1,13 @@
 #include "graph.h"
 
+struct Params
+{
+    int max_sat_level;
+    int vtx_ordering;
+    bool use_reordering;
+    bool quiet;
+};
+
 void mc(struct Graph* g, long *expand_call_count,
-        bool quiet, int vtx_ordering, bool use_reordering, struct VtxList *incumbent);
+        struct Params params, struct VtxList *incumbent);
 

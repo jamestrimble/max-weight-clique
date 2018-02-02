@@ -20,6 +20,7 @@ static struct argp_option options[] = {
     {"reordering", 'r', 0, 0, "Do reordering by dynamic degree during search"},
     {"vtx-ordering", 'o', "ORDER", 0, vertex_order_help},
     {"time-limit", 'l', "LIMIT", 0, "Time limit in seconds"},
+    {"max-sat-level", 'm', "LEVEL", 0, "Level of MAXSAT reasoning (0, 1 or 2); default=2"},
     { 0 }
 };
 
@@ -28,17 +29,13 @@ static struct {
     bool use_reordering;
     int vtx_ordering;
     int time_limit;
+    int max_sat_level;
     char *filename;
     int arg_num;
 } arguments;
 
 void set_default_arguments() {
-    arguments.quiet = false;
-    arguments.use_reordering = false;
-    arguments.vtx_ordering = 0;
-    arguments.time_limit = 0;
-    arguments.filename = NULL;
-    arguments.arg_num = 0;
+    arguments.max_sat_level = 2;
 }
 
 static error_t parse_opt (int key, char *arg, struct argp_state *state) {
@@ -54,6 +51,9 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state) {
             break;
         case 'l':
             arguments.time_limit = atoi(arg);
+            break;
+        case 'm':
+            arguments.max_sat_level = atoi(arg);
             break;
         case ARGP_KEY_ARG:
             if (arguments.arg_num >= 1)
@@ -85,7 +85,13 @@ int main(int argc, char** argv) {
     long expand_call_count = 0;
     struct VtxList clq;
     init_VtxList(&clq, g->n);
-    mc(g, &expand_call_count, arguments.quiet, arguments.vtx_ordering, arguments.use_reordering, &clq);
+    struct Params params = {
+        .max_sat_level = arguments.max_sat_level,
+        .vtx_ordering = arguments.vtx_ordering,
+        .use_reordering = arguments.use_reordering,
+        .quiet = arguments.quiet
+    };
+    mc(g, &expand_call_count, params, &clq);
     long elapsed_msec = get_elapsed_time_msec();
     if (is_timeout_flag_set()) {
         printf("TIMEOUT\n");

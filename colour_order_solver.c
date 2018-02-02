@@ -482,9 +482,10 @@ long process_inconsistent_set(
     return min_wt;
 }
 
-long unit_propagate(struct PreAlloc *pre_alloc, struct Graph *g, struct ListOfClauses *cc, long target_reduction)
+long unit_propagate(struct PreAlloc *pre_alloc, struct Graph *g, struct ListOfClauses *cc,
+        long target_reduction, struct Params *params)
 {
-    if (target_reduction <= 0)
+    if (params->max_sat_level == 0 || target_reduction <= 0)
         return 0;
 
     for (int v=0; v<g->n; v++)
@@ -520,29 +521,31 @@ long unit_propagate(struct PreAlloc *pre_alloc, struct Graph *g, struct ListOfCl
             return improvement;
     }
 
-    for (int i=0; i<cc->size; i++) {
-        struct Clause *clause = &cc->clause[i];
-        for (;;) {
-            if (clause->vv.size == 1)
-                break;
+    if (params->max_sat_level == 2) {
+        for (int i=0; i<cc->size; i++) {
+            struct Clause *clause = &cc->clause[i];
+            for (;;) {
+                if (clause->vv.size == 1)
+                    break;
 
-            if (clause->remaining_wt == 0)
-                break;
+                if (clause->remaining_wt == 0)
+                    break;
 
-            push_to_IntVec(&pre_alloc->unit_clause_indices, i);
+                push_to_IntVec(&pre_alloc->unit_clause_indices, i);
 
-            bool found_iset = look_for_iset_using_non_unit_clause(
-                    pre_alloc, g, clause, i, cc);
+                bool found_iset = look_for_iset_using_non_unit_clause(
+                        pre_alloc, g, clause, i, cc);
 
-            pop_from_IntVec(&pre_alloc->unit_clause_indices);
+                pop_from_IntVec(&pre_alloc->unit_clause_indices);
 
-            if (!found_iset)
-                break;
+                if (!found_iset)
+                    break;
 
-            improvement += process_inconsistent_set(&pre_alloc->iset, cc, &pre_alloc->cm);
+                improvement += process_inconsistent_set(&pre_alloc->iset, cc, &pre_alloc->cm);
 
-            if (improvement >= target_reduction)
-                return improvement;
+                if (improvement >= target_reduction)
+                    return improvement;
+            }
         }
     }
 
@@ -658,7 +661,7 @@ long do_colouring_without_reordering(struct PreAlloc *pre_alloc, struct Graph *g
 }
 
 bool colouring_bound(struct PreAlloc *pre_alloc, struct Graph *g, struct UnweightedVtxList *P,
-        long *cumulative_wt_bound, long target, bool use_reordering)
+        long *cumulative_wt_bound, long target, struct Params *params)
 {
     for (int i=(g->n+BITS_PER_WORD-1)/BITS_PER_WORD; i--; )
         pre_alloc->to_colour[i] = 0;
@@ -678,11 +681,11 @@ bool colouring_bound(struct PreAlloc *pre_alloc, struct Graph *g, struct Unweigh
 
     clear_ListOfClauses(&pre_alloc->cc);
 
-    long bound = use_reordering ?
+    long bound = params->use_reordering ?
             do_colouring_with_reordering(pre_alloc, g, P, numwords) :
             do_colouring_without_reordering(pre_alloc, g, P, numwords);
 
-    long improvement = unit_propagate(pre_alloc, g, &pre_alloc->cc, bound-target);
+    long improvement = unit_propagate(pre_alloc, g, &pre_alloc->cc, bound-target, params);
 
     bool proved_we_can_prune = bound-improvement <= target;
 
@@ -707,7 +710,7 @@ bool colouring_bound(struct PreAlloc *pre_alloc, struct Graph *g, struct Unweigh
 }
 
 void expand(struct PreAlloc *pre_alloc, struct Graph *g, struct VtxList *C, struct UnweightedVtxList *P,
-        struct VtxList *incumbent, long *expand_call_count, bool quiet, bool use_reordering)
+        struct VtxList *incumbent, long *expand_call_count, struct Params *params)
 {
     (*expand_call_count)++;
     if (*expand_call_count % 100000 == 0)
@@ -716,13 +719,13 @@ void expand(struct PreAlloc *pre_alloc, struct Graph *g, struct VtxList *C, stru
 
     if (P->size==0 && C->total_wt>incumbent->total_wt) {
         copy_VtxList(C, incumbent);
-        if (!quiet)
+        if (!params->quiet)
             printf("New incumbent of weight %ld\n", incumbent->total_wt);
     }
 
     long *cumulative_wt_bound = malloc(g->n * sizeof *cumulative_wt_bound);
 
-    if (colouring_bound(pre_alloc, g, P, cumulative_wt_bound, incumbent->total_wt - C->total_wt, use_reordering)) {
+    if (colouring_bound(pre_alloc, g, P, cumulative_wt_bound, incumbent->total_wt - C->total_wt, params)) {
         struct UnweightedVtxList new_P;
         init_UnweightedVtxList(&new_P, g->n);
 
@@ -738,7 +741,7 @@ void expand(struct PreAlloc *pre_alloc, struct Graph *g, struct VtxList *C, stru
             }
 
             vtxlist_push_vtx(g, C, v);
-            expand(pre_alloc, g, C, &new_P, incumbent, expand_call_count, quiet, use_reordering);
+            expand(pre_alloc, g, C, &new_P, incumbent, expand_call_count, params);
             vtxlist_pop_vtx(g, C);
         }
 
@@ -748,13 +751,12 @@ void expand(struct PreAlloc *pre_alloc, struct Graph *g, struct VtxList *C, stru
     free(cumulative_wt_bound);
 }
 
-void mc(struct Graph* g, long *expand_call_count,
-        bool quiet, int vtx_ordering, bool use_reordering, struct VtxList *incumbent)
+void mc(struct Graph* g, long *expand_call_count, struct Params params, struct VtxList *incumbent)
 {
     calculate_all_degrees(g);
 
     int *vv = malloc(g->n * sizeof *vv);
-    order_vertices(vv, g, vtx_ordering);
+    order_vertices(vv, g, params.vtx_ordering);
 
     struct Graph *ordered_graph = induced_subgraph(g, vv, g->n);
     populate_bit_complement_nd(ordered_graph);
@@ -784,7 +786,7 @@ void mc(struct Graph* g, long *expand_call_count,
     struct PreAlloc pre_alloc;
     init_PreAlloc(&pre_alloc, g->n);
 
-    expand(&pre_alloc, ordered_graph, &C, &P, incumbent, expand_call_count, quiet, use_reordering);
+    expand(&pre_alloc, ordered_graph, &C, &P, incumbent, expand_call_count, &params);
 
     destroy_PreAlloc(&pre_alloc);
 

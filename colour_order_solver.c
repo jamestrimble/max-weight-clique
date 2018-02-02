@@ -707,8 +707,7 @@ bool colouring_bound(struct PreAlloc *pre_alloc, struct Graph *g, struct Unweigh
 }
 
 void expand(struct PreAlloc *pre_alloc, struct Graph *g, struct VtxList *C, struct UnweightedVtxList *P,
-        struct VtxList *incumbent, int level, long *expand_call_count,
-        bool quiet, bool use_reordering)
+        struct VtxList *incumbent, long *expand_call_count, bool quiet, bool use_reordering)
 {
     (*expand_call_count)++;
     if (*expand_call_count % 100000 == 0)
@@ -739,7 +738,7 @@ void expand(struct PreAlloc *pre_alloc, struct Graph *g, struct VtxList *C, stru
             }
 
             vtxlist_push_vtx(g, C, v);
-            expand(pre_alloc, g, C, &new_P, incumbent, level+1, expand_call_count, quiet, use_reordering);
+            expand(pre_alloc, g, C, &new_P, incumbent, expand_call_count, quiet, use_reordering);
             vtxlist_pop_vtx(g, C);
         }
 
@@ -785,7 +784,7 @@ void mc(struct Graph* g, long *expand_call_count,
     struct PreAlloc pre_alloc;
     init_PreAlloc(&pre_alloc, g->n);
 
-    expand(&pre_alloc, ordered_graph, &C, &P, incumbent, 0, expand_call_count, quiet, use_reordering);
+    expand(&pre_alloc, ordered_graph, &C, &P, incumbent, expand_call_count, quiet, use_reordering);
 
     destroy_PreAlloc(&pre_alloc);
 

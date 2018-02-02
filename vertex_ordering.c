@@ -87,6 +87,7 @@ void order_vertices(int *vv, struct Graph *g, int vtx_ordering) {
     case -5: calc_weighted_degs(g); carraghan_pardalos_order(vv, g, true); break;
     case  9: INSERTION_SORT_VV(inc_wt_over_deg_key) break;
     case -9: INSERTION_SORT_VV(dec_wt_over_deg_key) break;
+    case 10: INSERTION_SORT_VV(dec_deg_key) break;
     default: fail("Unrecognised vertex order");
     }
 }

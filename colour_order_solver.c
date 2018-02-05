@@ -50,6 +50,13 @@ void push(struct IntStack *s, int val)
     s->vals[s->size++] = val;
 }
 
+// prerequisite: the stack has at least one space free
+void push_if(struct IntStack *s, int val, bool condition)
+{
+    s->vals[s->size] = val;
+    s->size += condition;
+}
+
 int pop(struct IntStack *s)
 {
     assert (s->size != 0);
@@ -360,16 +367,16 @@ void unit_propagate_once(struct PreAlloc *pre_alloc, struct Graph *g, struct Lis
             //reason[v] = u_idx;
             for (int i=0; i<g->nonadjlists[v].size; i++) {
                 int w = g->nonadjlists[v].vals[i];
-                if (pre_alloc->cm.vtx_to_clauses[w].size) {
+                int sz = pre_alloc->cm.vtx_to_clauses[w].size;
+                if (sz) {
                     if (pre_alloc->reason[w] == -1) {
                         pre_alloc->reason[w] = u_idx;
-                        for (int j=0; j<pre_alloc->cm.vtx_to_clauses[w].size; j++) {
+                        for (int j=0; j<sz; j++) {
                             int c_idx = pre_alloc->cm.vtx_to_clauses[w].vals[j];
                             struct Clause *c = &cc->clause[c_idx];
                             c->remaining_vv_count--;
-                            if (c->remaining_vv_count==1) {
-                                push(&pre_alloc->S, c_idx);
-                            } else if (c->remaining_vv_count==0) {
+                            push_if(&pre_alloc->S, c_idx, c->remaining_vv_count==1);
+                            if (c->remaining_vv_count==0) {
                                 create_inconsistent_set(pre_alloc, g, I, c_idx, cc, pre_alloc->reason);
                                 return;
                             }

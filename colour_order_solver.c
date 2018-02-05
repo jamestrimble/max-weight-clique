@@ -508,6 +508,10 @@ long unit_propagate(struct PreAlloc *pre_alloc, struct Graph *g, struct ListOfCl
 
     long improvement = 0;
 
+#ifdef VERY_VERBOSE
+    printf("VERY_VERBOSE {\"isets1\": [");
+    char *sep = "";
+#endif
     for (;;) {
         clear_stack_without_dups(&pre_alloc->I);
         unit_propagate_once(pre_alloc, g, cc, &pre_alloc->I);
@@ -516,12 +520,29 @@ long unit_propagate(struct PreAlloc *pre_alloc, struct Graph *g, struct ListOfCl
             break;
 
         improvement += process_inconsistent_set(&pre_alloc->I, cc, &pre_alloc->cm);
+#ifdef VERY_VERBOSE
+        printf("%s[", sep);
+        sep = ", ";
+        char *sep2 = "";
+        for (int i=0; i<pre_alloc->I.size; i++) {
+            printf("%s%d", sep2, pre_alloc->I.vals[i]);
+            sep2 = ", ";
+        }
+        printf("]");
+#endif
 
         if (improvement >= target_reduction)
             return improvement;
     }
+#ifdef VERY_VERBOSE
+    printf("]}\n");
+#endif
 
     if (params->max_sat_level == 2) {
+#ifdef VERY_VERBOSE
+        printf("VERY_VERBOSE {\"isets2\": [");
+        sep = "";
+#endif
         for (int i=0; i<cc->size; i++) {
             struct Clause *clause = &cc->clause[i];
             for (;;) {
@@ -541,12 +562,25 @@ long unit_propagate(struct PreAlloc *pre_alloc, struct Graph *g, struct ListOfCl
                 if (!found_iset)
                     break;
 
+#ifdef VERY_VERBOSE
+                printf("%s[", sep);
+                sep = ", ";
+                char *sep2 = "";
+                for (int i=0; i<pre_alloc->iset.size; i++) {
+                    printf("%s%d", sep2, pre_alloc->iset.vals[i]);
+                    sep2 = ", ";
+                }
+                printf("]");
+#endif
                 improvement += process_inconsistent_set(&pre_alloc->iset, cc, &pre_alloc->cm);
 
                 if (improvement >= target_reduction)
                     return improvement;
             }
         }
+#ifdef VERY_VERBOSE
+        printf("]}\n");
+#endif
     }
 
     return improvement;
@@ -684,6 +718,29 @@ bool colouring_bound(struct PreAlloc *pre_alloc, struct Graph *g, struct Unweigh
     long bound = params->use_reordering ?
             do_colouring_with_reordering(pre_alloc, g, P, numwords) :
             do_colouring_without_reordering(pre_alloc, g, P, numwords);
+
+#ifdef VERY_VERBOSE
+    printf("VERY_VERBOSE {\"clauses\": [");
+    char *sep = "";
+    long total_wt = 0;
+    for (int i=0; i<pre_alloc->cc.size; i++) {
+        printf("%s", sep);
+        sep = ", ";
+        struct Clause *c = &pre_alloc->cc.clause[i];
+        printf("{\"weight\": %ld, ", c->weight);
+        printf("\"vertices\": [");
+        total_wt += c->weight;
+        char *sep2 = "";
+        for (int j=0; j<c->vv.size; j++) {
+            int v = c->vv.vals[j];
+            printf("%s%d", sep2, v);
+            sep2 = ", ";
+        }
+        printf("]");
+        printf("}");
+    }
+    printf("], \"total_wt\": %ld}\n", total_wt);
+#endif
 
     long improvement = unit_propagate(pre_alloc, g, &pre_alloc->cc, bound-target, params);
 

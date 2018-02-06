@@ -558,7 +558,7 @@ long unit_propagate(struct PreAlloc *pre_alloc, struct Graph *g, struct ListOfCl
         for (int i=0; i<cc->size; i++) {
             struct Clause *clause = &cc->clause[i];
             for (;;) {
-                if (clause->vv.size == 1)
+                if (clause->vv.size != 2)
                     break;
 
                 if (clause->remaining_wt == 0)

@@ -369,7 +369,7 @@ void unit_propagate_once(struct PreAlloc *pre_alloc, struct Graph *g, struct Lis
         if (!pre_alloc->vertex_has_been_propagated[v]) {
             //TODO: think about the next commented-out line. Should it be included???
             //reason[v] = u_idx;
-            for (int i=0; i<g->nonadjlists[v].size; i++) {
+            for (int i=g->nonadjlists[v].size; i--; ) {
                 int w = g->nonadjlists[v].vals[i];
                 int sz = pre_alloc->cm.vtx_to_clauses[w].size;
                 if (sz) {

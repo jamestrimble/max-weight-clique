@@ -160,7 +160,7 @@ struct Clause {
     struct IntVec vv;
     long weight;
     long remaining_wt;
-    int remaining_vv_count;
+//    int remaining_vv_count;
 };
 
 struct ListOfClauses {
@@ -233,6 +233,9 @@ struct PreAlloc
     // used in unit_propagate_once
     bool *vertex_has_been_propagated;
 
+    int *vv_count;
+    int *remaining_vv_count;
+
     // Used in colouring_bound():
     // last_clause[v] is the index of the last clause in which v appears
     int *last_clause;
@@ -266,6 +269,8 @@ void init_PreAlloc(struct PreAlloc *pre_alloc, int n)
 {
     pre_alloc->reason = malloc(n * sizeof(*pre_alloc->reason));
     pre_alloc->vertex_has_been_propagated = malloc(n * sizeof(*pre_alloc->vertex_has_been_propagated));
+    pre_alloc->vv_count = malloc(n * sizeof(*pre_alloc->vv_count));
+    pre_alloc->remaining_vv_count = malloc(n * sizeof(*pre_alloc->remaining_vv_count));
     pre_alloc->last_clause = malloc(n * sizeof(*pre_alloc->last_clause));
     pre_alloc->to_colour = malloc((n+BITS_PER_WORD-1)/BITS_PER_WORD * sizeof *pre_alloc->to_colour);
     pre_alloc->candidates = malloc((n+BITS_PER_WORD-1)/BITS_PER_WORD * sizeof *pre_alloc->candidates);
@@ -285,6 +290,8 @@ void destroy_PreAlloc(struct PreAlloc *pre_alloc)
 {
     free(pre_alloc->reason);
     free(pre_alloc->vertex_has_been_propagated);
+    free(pre_alloc->vv_count);
+    free(pre_alloc->remaining_vv_count);
     free(pre_alloc->last_clause);
     free(pre_alloc->to_colour);
     free(pre_alloc->candidates);
@@ -341,10 +348,7 @@ void unit_propagate_once(struct PreAlloc *pre_alloc, struct Graph *g, struct Lis
         struct IntStackWithoutDups *I)
 {
     clear_IntStack(&pre_alloc->S);
-    for (int i=0; i<cc->size; i++) {
-        struct Clause *clause = &cc->clause[i];
-        clause->remaining_vv_count = clause->vv.size;
-    }
+    memcpy(pre_alloc->remaining_vv_count, pre_alloc->vv_count, cc->size * sizeof(int));
 
     for (int i=0; i<pre_alloc->unit_clause_indices.size; i++) {
         int clause_idx = pre_alloc->unit_clause_indices.vals[i];
@@ -360,7 +364,7 @@ void unit_propagate_once(struct PreAlloc *pre_alloc, struct Graph *g, struct Lis
     while (pre_alloc->S.size) {
         int u_idx = pop(&pre_alloc->S);
         struct Clause *u = &cc->clause[u_idx];
-        assert (u->remaining_vv_count == 1);
+        assert (pre_alloc->remaining_vv_count[u_idx]/*u->remaining_vv_count*/ == 1);
         int v = get_unique_remaining_vtx(u, pre_alloc->reason);
         if (!pre_alloc->vertex_has_been_propagated[v]) {
             //TODO: think about the next commented-out line. Should it be included???
@@ -373,10 +377,10 @@ void unit_propagate_once(struct PreAlloc *pre_alloc, struct Graph *g, struct Lis
                         pre_alloc->reason[w] = u_idx;
                         for (int j=0; j<sz; j++) {
                             int c_idx = pre_alloc->cm.vtx_to_clauses[w].vals[j];
-                            struct Clause *c = &cc->clause[c_idx];
-                            c->remaining_vv_count--;
-                            push_if(&pre_alloc->S, c_idx, c->remaining_vv_count==1);
-                            if (c->remaining_vv_count==0) {
+//                            struct Clause *c = &cc->clause[c_idx];
+                            pre_alloc->remaining_vv_count[c_idx]--;
+                            push_if(&pre_alloc->S, c_idx, pre_alloc->remaining_vv_count[c_idx]==1);
+                            if (pre_alloc->remaining_vv_count[c_idx]==0) {
                                 create_inconsistent_set(pre_alloc, g, I, c_idx, cc, pre_alloc->reason);
                                 return;
                             }
@@ -500,6 +504,7 @@ long unit_propagate(struct PreAlloc *pre_alloc, struct Graph *g, struct ListOfCl
 
     for (int i=0; i<cc->size; i++) {
         struct Clause *clause = &cc->clause[i];
+        pre_alloc->vv_count[i] = clause->vv.size;
         for (int j=0; j<clause->vv.size; j++) {
             int v = clause->vv.vals[j];
             push_to_IntVec(&pre_alloc->cm.vtx_to_clauses[v], i);

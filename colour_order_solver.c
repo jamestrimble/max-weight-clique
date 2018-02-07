@@ -407,23 +407,25 @@ void remove_from_clause_membership(int v, int clause_idx, struct ClauseMembershi
 }
 
 void fake_length_one_clause(struct Clause *clause, int clause_idx, int vtx_pos,
-        struct ClauseMembership *cm) {
+        struct PreAlloc *pre_alloc) {
     int tmp = clause->vv.vals[vtx_pos];
     clause->vv.vals[vtx_pos] = clause->vv.vals[0];
     clause->vv.vals[0] = tmp;
     for (int i=1; i<clause->vv.size; i++) {
         int v = clause->vv.vals[i];
-        remove_from_clause_membership(v, clause_idx, cm);
+        remove_from_clause_membership(v, clause_idx, &pre_alloc->cm);
     }
     clause->vv.size = 1;
+    pre_alloc->vv_count[clause_idx] = 1;
 }
 
 void unfake_length_one_clause(struct Clause *clause, int clause_idx, int clause_len,
-        struct ClauseMembership *cm) {
+        struct PreAlloc *pre_alloc) {
     clause->vv.size = clause_len;
+    pre_alloc->vv_count[clause_idx] = clause_len;
     for (int i=1; i<clause_len; i++) {
         int v = clause->vv.vals[i];
-        cm->vtx_to_clauses[v].vals[cm->vtx_to_clauses[v].size++] = clause_idx;
+        pre_alloc->cm.vtx_to_clauses[v].vals[pre_alloc->cm.vtx_to_clauses[v].size++] = clause_idx;
     }
 }
 
@@ -438,9 +440,9 @@ bool look_for_iset_using_non_unit_clause(
     int clause_len = clause->vv.size;
     for (int z=0; z<clause_len; z++) {
         clear_stack_without_dups(&pre_alloc->I);
-        fake_length_one_clause(clause, clause_idx, z, &pre_alloc->cm);
+        fake_length_one_clause(clause, clause_idx, z, pre_alloc);
         unit_propagate_once(pre_alloc, g, cc, &pre_alloc->I);
-        unfake_length_one_clause(clause, clause_idx, clause_len, &pre_alloc->cm);
+        unfake_length_one_clause(clause, clause_idx, clause_len, pre_alloc);
         if (pre_alloc->I.size==0)
             return false;
         for (int i=0; i<pre_alloc->I.size; i++)

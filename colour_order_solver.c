@@ -307,6 +307,8 @@ struct PreAlloc
     // last_clause[v] is the index of the last clause in which v appears
     int *last_clause;
 
+    int *col_class;     // used in simple_colouring_bound()
+
     unsigned long long *to_colour;
 
     unsigned long long *candidates;
@@ -339,6 +341,7 @@ void init_PreAlloc(struct PreAlloc *pre_alloc, int n)
     pre_alloc->vv_count = malloc(n * sizeof(*pre_alloc->vv_count));
     pre_alloc->remaining_vv_count = malloc(n * sizeof(*pre_alloc->remaining_vv_count));
     pre_alloc->last_clause = malloc(n * sizeof(*pre_alloc->last_clause));
+    pre_alloc->col_class = malloc(n * sizeof(*pre_alloc->col_class));
     pre_alloc->to_colour = malloc((n+BITS_PER_WORD-1)/BITS_PER_WORD * sizeof *pre_alloc->to_colour);
     pre_alloc->candidates = malloc((n+BITS_PER_WORD-1)/BITS_PER_WORD * sizeof *pre_alloc->candidates);
     pre_alloc->tmp_bitset = malloc((n+BITS_PER_WORD-1)/BITS_PER_WORD * sizeof *pre_alloc->tmp_bitset);
@@ -360,6 +363,7 @@ void destroy_PreAlloc(struct PreAlloc *pre_alloc)
     free(pre_alloc->vv_count);
     free(pre_alloc->remaining_vv_count);
     free(pre_alloc->last_clause);
+    free(pre_alloc->col_class);
     free(pre_alloc->to_colour);
     free(pre_alloc->candidates);
     free(pre_alloc->tmp_bitset);
@@ -565,7 +569,7 @@ long process_inconsistent_set(
 long unit_propagate(struct PreAlloc *pre_alloc, struct Graph *g, struct ListOfClauses *cc,
         long target_reduction, struct Params *params)
 {
-    if (params->max_sat_level == 0 || target_reduction <= 0)
+    if (target_reduction <= 0)
         return 0;
 
     for (int v=0; v<g->n; v++)
@@ -775,18 +779,23 @@ long do_colouring_without_reordering(struct PreAlloc *pre_alloc, struct Graph *g
     return bound;
 }
 
+int calc_numwords(struct UnweightedVtxList *P)
+{
+    int max_v = 0;
+    for (int i=0; i<P->size; i++)
+        if (P->vv[i] > max_v)
+            max_v = P->vv[i];
+
+    return max_v/BITS_PER_WORD+1;
+}
+
 bool colouring_bound(struct PreAlloc *pre_alloc, struct Graph *g, struct UnweightedVtxList *P,
         long *cumulative_wt_bound, long target, struct Params *params)
 {
     for (int i=(g->n+BITS_PER_WORD-1)/BITS_PER_WORD; i--; )
         pre_alloc->to_colour[i] = 0;
 
-    int max_v = 0;
-    for (int i=0; i<P->size; i++)
-        if (P->vv[i] > max_v)
-            max_v = P->vv[i];
-
-    int numwords = max_v/BITS_PER_WORD+1;
+    int numwords = calc_numwords(P);
 
     for (int i=0; i<P->size; i++)
         set_bit(pre_alloc->to_colour, P->vv[i]);
@@ -847,6 +856,52 @@ bool colouring_bound(struct PreAlloc *pre_alloc, struct Graph *g, struct Unweigh
     return !proved_we_can_prune;
 }
 
+bool simple_colouring_bound(struct PreAlloc *pre_alloc, struct Graph *g, struct UnweightedVtxList *P,
+        long *cumulative_wt_bound, long target, struct Params *params)
+{
+    for (int i=(g->n+BITS_PER_WORD-1)/BITS_PER_WORD; i--; )
+        pre_alloc->to_colour[i] = 0;
+
+    int numwords = calc_numwords(P);
+
+    for (int i=0; i<P->size; i++)
+        set_bit(pre_alloc->to_colour, P->vv[i]);
+
+    for (int i=0; i<P->size; i++)
+        pre_alloc->residual_wt[P->vv[i]] = g->weight[P->vv[i]];
+
+    P->size = 0;
+    long bound = 0;
+    int v;
+    while ((v=first_set_bit(pre_alloc->to_colour, numwords))!=-1) {
+        copy_bitset(pre_alloc->to_colour, pre_alloc->candidates, numwords);
+        long class_min_wt = pre_alloc->residual_wt[v];
+        unset_bit(pre_alloc->to_colour, v);
+        int col_class_size = 1;
+        pre_alloc->col_class[0] = v;
+        bitset_intersect_with(pre_alloc->candidates, g->bit_complement_nd[v], numwords);
+        while ((v=first_set_bit(pre_alloc->candidates, numwords))!=-1) {
+            if (pre_alloc->residual_wt[v] < class_min_wt)
+                class_min_wt = pre_alloc->residual_wt[v];
+            unset_bit(pre_alloc->to_colour, v);
+            pre_alloc->col_class[col_class_size++] = v;
+            bitset_intersect_with(pre_alloc->candidates, g->bit_complement_nd[v], numwords);
+        }
+        bound += class_min_wt;
+        for (int i=0; i<col_class_size; i++) {
+            int w = pre_alloc->col_class[i];
+            pre_alloc->residual_wt[w] -= class_min_wt;
+            if (pre_alloc->residual_wt[w] > 0) {
+                set_bit(pre_alloc->to_colour, w);
+            } else {
+                cumulative_wt_bound[P->size] = bound;
+                P->vv[P->size++] = w;
+            }
+        }
+    }
+    return bound > target;
+}
+
 void expand(struct PreAlloc *pre_alloc, struct Graph *g, struct VtxList *C, struct UnweightedVtxList *P,
         struct VtxList *incumbent, long *expand_call_count, struct Params *params)
 {
@@ -863,7 +918,9 @@ void expand(struct PreAlloc *pre_alloc, struct Graph *g, struct VtxList *C, stru
 
     long *cumulative_wt_bound = malloc(g->n * sizeof *cumulative_wt_bound);
 
-    if (colouring_bound(pre_alloc, g, P, cumulative_wt_bound, incumbent->total_wt - C->total_wt, params)) {
+    if (params->max_sat_level ?
+                colouring_bound(pre_alloc, g, P, cumulative_wt_bound, incumbent->total_wt - C->total_wt, params) :
+                simple_colouring_bound(pre_alloc, g, P, cumulative_wt_bound, incumbent->total_wt - C->total_wt, params)) {
         struct UnweightedVtxList new_P;
         init_UnweightedVtxList(&new_P, g->n);
 

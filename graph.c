@@ -2,11 +2,15 @@
 
 #include "graph.h"
 #include "util.h"
-#include "bitset.h"
 
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+
+void bitset_set_bit(unsigned long long *bitset, int bit)
+{
+    bitset[bit/BITS_PER_WORD] |= (1ull << (bit%BITS_PER_WORD));
+}
 
 void destroy_IntArray(struct IntArray *vec)
 {
@@ -31,7 +35,7 @@ void populate_bit_complement_nd(struct Graph *g) {
     for (int i=0; i<g->n; i++) {
         for (int j=0; j<g->n; j++) {
             if (!g->adjmat[i][j] && i!=j)
-                set_bit(g->bit_complement_nd[i], j);
+                bitset_set_bit(g->bit_complement_nd[i], j);
         }
     }
 }

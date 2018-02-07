@@ -4,7 +4,6 @@
 #include "c_program_timing.h"
 #include "graph.h"
 #include "sorting.h"
-#include "bitset.h"
 #include "vertex_ordering.h"
 #include "util.h"
 #include "colour_order_solver.h"

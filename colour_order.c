@@ -78,6 +78,9 @@ int main(int argc, char** argv) {
     set_default_arguments();
     argp_parse(&argp, argc, argv, 0, 0, 0);
 
+    if (arguments.use_reordering && arguments.max_sat_level==0)
+        fail("The -r and -m0 flags cannot be used together.");
+
     struct Graph* g = readGraph(arguments.filename);
 
     set_start_time();

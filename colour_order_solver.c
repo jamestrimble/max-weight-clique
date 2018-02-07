@@ -328,8 +328,6 @@ struct PreAlloc
 
     int *sorted_vv;
 
-    int *dynamic_antideg;
-
     struct IntVec unit_clause_indices;
 
     struct IntStack S;
@@ -356,7 +354,6 @@ void init_PreAlloc(struct PreAlloc *pre_alloc, int n)
     pre_alloc->tmp_bitset = malloc((n+BITS_PER_WORD-1)/BITS_PER_WORD * sizeof *pre_alloc->tmp_bitset);
     pre_alloc->residual_wt = malloc(n * sizeof *pre_alloc->residual_wt);
     pre_alloc->sorted_vv = malloc(n * sizeof *pre_alloc->sorted_vv);
-    pre_alloc->dynamic_antideg = malloc(n * sizeof *pre_alloc->dynamic_antideg);
     init_IntVec(&pre_alloc->unit_clause_indices);
     init_IntStack(&pre_alloc->S, n);
     init_IntStackWithoutDups(&pre_alloc->I, n);
@@ -378,7 +375,6 @@ void destroy_PreAlloc(struct PreAlloc *pre_alloc)
     free(pre_alloc->tmp_bitset);
     free(pre_alloc->residual_wt);
     free(pre_alloc->sorted_vv);
-    free(pre_alloc->dynamic_antideg);
     destroy_IntVec(&pre_alloc->unit_clause_indices);
     destroy_IntStack(&pre_alloc->S);
     destroy_IntStackWithoutDups(&pre_alloc->I);
@@ -678,24 +674,6 @@ long unit_propagate(struct PreAlloc *pre_alloc, struct Graph *g, struct ListOfCl
     }
 
     return improvement;
-}
-
-int choose_best_v(struct PreAlloc *pre_alloc, unsigned long long *candidates,
-        int *dynamic_antideg, int numwords)
-{
-    copy_bitset(candidates, pre_alloc->tmp_bitset, numwords);
-    int best_score = INT_MAX;
-    int best_v = -1;
-    int v;
-    while (-1 != (v = first_set_bit(pre_alloc->tmp_bitset, numwords))) {
-        int score = pre_alloc->dynamic_antideg[v];
-        if (score < best_score) {
-            best_v = v;
-            best_score = score;
-        }
-        unset_bit(pre_alloc->tmp_bitset, v);
-    }
-    return best_v;
 }
 
 long do_colouring_without_reordering(struct PreAlloc *pre_alloc, struct Graph *g, int numwords)

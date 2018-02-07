@@ -17,7 +17,6 @@ static char doc[] = "Find a maximum clique in a graph in DIMACS format";
 static char args_doc[] = "FILENAME";
 static struct argp_option options[] = {
     {"quiet", 'q', 0, 0, "Quiet output"},
-    {"reordering", 'r', 0, 0, "Do reordering by dynamic degree during search"},
     {"vtx-ordering", 'o', "ORDER", 0, vertex_order_help},
     {"time-limit", 'l', "LIMIT", 0, "Time limit in seconds"},
     {"max-sat-level", 'm', "LEVEL", 0, "Level of MAXSAT reasoning (0, 1 or 2); default=2"},
@@ -26,7 +25,6 @@ static struct argp_option options[] = {
 
 static struct {
     bool quiet;
-    bool use_reordering;
     int vtx_ordering;
     int time_limit;
     int max_sat_level;
@@ -42,9 +40,6 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state) {
     switch (key) {
         case 'q':
             arguments.quiet = true;
-            break;
-        case 'r':
-            arguments.use_reordering = true;
             break;
         case 'o':
             arguments.vtx_ordering = atoi(arg);
@@ -78,9 +73,6 @@ int main(int argc, char** argv) {
     set_default_arguments();
     argp_parse(&argp, argc, argv, 0, 0, 0);
 
-    if (arguments.use_reordering && arguments.max_sat_level==0)
-        fail("The -r and -m0 flags cannot be used together.");
-
     struct Graph* g = readGraph(arguments.filename);
 
     set_start_time();
@@ -91,7 +83,6 @@ int main(int argc, char** argv) {
     struct Params params = {
         .max_sat_level = arguments.max_sat_level,
         .vtx_ordering = arguments.vtx_ordering,
-        .use_reordering = arguments.use_reordering,
         .quiet = arguments.quiet
     };
     mc(g, &expand_call_count, params, &clq);

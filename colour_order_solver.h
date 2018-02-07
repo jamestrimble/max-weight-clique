@@ -4,7 +4,6 @@ struct Params
 {
     int max_sat_level;
     int vtx_ordering;
-    bool use_reordering;
     bool quiet;
 };
 

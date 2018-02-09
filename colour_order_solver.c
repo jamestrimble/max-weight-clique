@@ -303,6 +303,8 @@ void destroy_ClauseMembership(struct ClauseMembership *cm)
 
 struct PreAlloc
 {
+    bool *not_useful;
+
     // in unit_propagate_once, each vertex has a clause index as its reason, or -1
     int *reason;
 
@@ -343,6 +345,7 @@ struct PreAlloc
 
 void init_PreAlloc(struct PreAlloc *pre_alloc, int n)
 {
+    pre_alloc->not_useful = malloc(n * sizeof(*pre_alloc->not_useful));
     pre_alloc->reason = malloc(n * sizeof(*pre_alloc->reason));
     pre_alloc->vertex_has_been_propagated = malloc(n * sizeof(*pre_alloc->vertex_has_been_propagated));
     pre_alloc->vv_count = malloc(n * sizeof(*pre_alloc->vv_count));
@@ -364,6 +367,7 @@ void init_PreAlloc(struct PreAlloc *pre_alloc, int n)
 
 void destroy_PreAlloc(struct PreAlloc *pre_alloc)
 {
+    free(pre_alloc->not_useful);
     free(pre_alloc->reason);
     free(pre_alloc->vertex_has_been_propagated);
     free(pre_alloc->vv_count);
@@ -495,7 +499,7 @@ void fake_length_one_clause(struct Clause *clause, int clause_idx, int vtx_pos,
     pre_alloc->vv_count[clause_idx] = 1;
 }
 
-void unfake_length_one_clause(struct Clause *clause, int clause_idx, int clause_len,
+void unfake_length_one_clause(struct Clause *clause, int clause_idx, int vtx_pos, int clause_len,
         struct PreAlloc *pre_alloc) {
     clause->vv.size = clause_len;
     pre_alloc->vv_count[clause_idx] = clause_len;
@@ -503,6 +507,9 @@ void unfake_length_one_clause(struct Clause *clause, int clause_idx, int clause_
         int v = clause->vv.vals[i];
         pre_alloc->cm.vtx_to_clauses[v].vals[pre_alloc->cm.vtx_to_clauses[v].size++] = clause_idx;
     }
+    int tmp = clause->vv.vals[vtx_pos];
+    clause->vv.vals[vtx_pos] = clause->vv.vals[0];
+    clause->vv.vals[0] = tmp;
 }
 
 bool look_for_iset_using_non_unit_clause(
@@ -515,12 +522,15 @@ bool look_for_iset_using_non_unit_clause(
     clear_stack_without_dups(&pre_alloc->iset);
     int clause_len = clause->vv.size;
     for (int z=0; z<clause_len; z++) {
+//    for (int z=clause_len; z--; ) {
         clear_stack_without_dups(&pre_alloc->I);
         fake_length_one_clause(clause, clause_idx, z, pre_alloc);
         unit_propagate_once(pre_alloc, g, cc, &pre_alloc->I);
-        unfake_length_one_clause(clause, clause_idx, clause_len, pre_alloc);
-        if (pre_alloc->I.size==0)
+        unfake_length_one_clause(clause, clause_idx, z, clause_len, pre_alloc);
+        if (pre_alloc->I.size==0) {
+            pre_alloc->not_useful[clause->vv.vals[z]] = true;
             return false;
+        }
         for (int i=0; i<pre_alloc->I.size; i++)
             push_without_dups(&pre_alloc->iset, pre_alloc->I.vals[i]);
     }
@@ -569,6 +579,16 @@ long process_inconsistent_set(
     }
     cc->clause[max_idx].weight -= min_wt;  // decrease weight of last clause in set
     return min_wt;
+}
+
+bool any_vtx_not_useful(struct PreAlloc *pre_alloc, struct Clause *clause)
+{
+    for (int i=0; i<clause->vv.size; i++) {
+        int v = clause->vv.vals[i];
+        if (pre_alloc->not_useful[v])
+            return true;
+    }
+    return false;
 }
 
 long unit_propagate(struct PreAlloc *pre_alloc, struct Graph *g, struct ListOfClauses *cc,
@@ -629,6 +649,12 @@ long unit_propagate(struct PreAlloc *pre_alloc, struct Graph *g, struct ListOfCl
 #endif
 
     if (params->max_sat_level == 2) {
+        memset(pre_alloc->not_useful, 0, g->n * sizeof(bool));
+        for (int i=0; i<cc->size; i++) {
+            struct Clause *clause = &cc->clause[i];
+            if (clause->vv.size==1 && clause->remaining_wt>0)
+                pre_alloc->not_useful[clause->vv.vals[0]] = true;
+        }
 #ifdef VERY_VERBOSE
         printf("VERY_VERBOSE {\"isets2\": [");
         sep = "";
@@ -636,6 +662,9 @@ long unit_propagate(struct PreAlloc *pre_alloc, struct Graph *g, struct ListOfCl
         for (int i=0; i<cc->size; i++) {
             struct Clause *clause = &cc->clause[i];
             if (clause->vv.size != 2)
+                continue;
+
+            if (any_vtx_not_useful(pre_alloc, clause))
                 continue;
 
             for (;;) {

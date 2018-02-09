@@ -391,14 +391,11 @@ void destroy_PreAlloc(struct PreAlloc *pre_alloc)
 *******************************************************************************/
 
 int get_unique_remaining_vtx(struct Clause *c, int *reason) {
-    for (int i=0; i<c->vv.size; i++) {
-        int v = c->vv.vals[i];
-        if (reason[v] == -1)
-            return v;
-    }
-
-    assert(false);   // should never reach here
-    return -1;
+    int i = 0;
+    int v;
+    while (reason[v = c->vv.vals[i]] != -1)
+        ++i;
+    return v;
 }
 
 void create_inconsistent_set(struct PreAlloc *pre_alloc, struct Graph *g, struct IntStackWithoutDups *I,

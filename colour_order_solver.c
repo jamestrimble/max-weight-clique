@@ -443,23 +443,18 @@ void unit_propagate_once(struct PreAlloc *pre_alloc, struct Graph *g, struct Lis
         assert (pre_alloc->remaining_vv_count[u_idx]/*u->remaining_vv_count*/ == 1);
         int v = get_unique_remaining_vtx(u, pre_alloc->reason);
         if (!pre_alloc->vertex_has_been_propagated[v]) {
-            //TODO: think about the next commented-out line. Should it be included???
-            //reason[v] = u_idx;
             for (int i=g->nonadjlists[v].size; i--; ) {
                 int w = g->nonadjlists[v].vals[i];
                 int sz = pre_alloc->cm.vtx_to_clauses[w].size;
-                if (sz) {
-                    if (pre_alloc->reason[w] == -1) {
-                        pre_alloc->reason[w] = u_idx;
-                        for (int j=0; j<sz; j++) {
-                            int c_idx = pre_alloc->cm.vtx_to_clauses[w].vals[j];
-//                            struct Clause *c = &cc->clause[c_idx];
-                            pre_alloc->remaining_vv_count[c_idx]--;
-                            push_if(&pre_alloc->S, c_idx, pre_alloc->remaining_vv_count[c_idx]==1);
-                            if (pre_alloc->remaining_vv_count[c_idx]==0) {
-                                create_inconsistent_set(pre_alloc, g, I, c_idx, cc, pre_alloc->reason);
-                                return;
-                            }
+                if (sz != 0 && pre_alloc->reason[w] == -1) {
+                    pre_alloc->reason[w] = u_idx;
+                    for (int j=0; j<sz; j++) {
+                        int c_idx = pre_alloc->cm.vtx_to_clauses[w].vals[j];
+                        pre_alloc->remaining_vv_count[c_idx]--;
+                        push_if(&pre_alloc->S, c_idx, pre_alloc->remaining_vv_count[c_idx]==1);
+                        if (pre_alloc->remaining_vv_count[c_idx]==0) {
+                            create_inconsistent_set(pre_alloc, g, I, c_idx, cc, pre_alloc->reason);
+                            return;
                         }
                     }
                 }

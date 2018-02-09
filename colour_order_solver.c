@@ -412,11 +412,9 @@ void create_inconsistent_set(struct PreAlloc *pre_alloc, struct Graph *g, struct
         for (int k=0; k<d->vv.size; k++) {
             int t = d->vv.vals[k];
             int r = reason[t];
-            if (r != -1) {  // " removed literal l' "
-                if (!I->on_stack[r]) {
-                    push(S, r);
-                    push_without_dups(I, r);
-                }
+            if (r != -1 && !I->on_stack[r]) {
+                push(S, r);
+                push_without_dups(I, r);
             }
         }
     }

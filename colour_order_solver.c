@@ -395,6 +395,7 @@ int get_unique_remaining_vtx(struct Clause *c, int *reason) {
     int v;
     while (reason[v = c->vv.vals[i]] != -1)
         ++i;
+    assert(i < c->vv.size);
     return v;
 }
 
@@ -470,17 +471,18 @@ void unit_propagate_once(struct PreAlloc *pre_alloc, struct Graph *g, struct Lis
     }
 }
 
+// Note: this swaps the vertex to the end of its list, so that it can be
+// re-added to the lists if necessary
 void remove_from_clause_membership(int v, int clause_idx, struct ClauseMembership *cm)
 {
-    for (int i=0; i<cm->vtx_to_clauses[v].size; i++) {
-        if (cm->vtx_to_clauses[v].vals[i] == clause_idx) {
-            cm->vtx_to_clauses[v].vals[i] = cm->vtx_to_clauses[v].vals[cm->vtx_to_clauses[v].size-1];
-            cm->vtx_to_clauses[v].vals[cm->vtx_to_clauses[v].size-1] = clause_idx;
-            cm->vtx_to_clauses[v].size--;
-            return;
-        }
-    }
-    assert(false);
+    struct IntVec *cm_v = &cm->vtx_to_clauses[v];
+    int i = 0;
+    while (cm_v->vals[i] != clause_idx)
+        ++i;
+    assert(i < cm_v->size);
+    cm_v->vals[i] = cm_v->vals[cm_v->size-1];
+    cm_v->vals[cm_v->size-1] = clause_idx;
+    cm_v->size--;
 }
 
 void fake_length_one_clause(struct Clause *clause, int clause_idx, int vtx_pos,
@@ -534,17 +536,6 @@ bool look_for_iset_using_non_unit_clause(
     return true;
 }
 
-void remove_clause_membership(struct ClauseMembership *cm, int v, int clause_idx)
-{
-    for (int i=0; i<cm->vtx_to_clauses[v].size; i++) {
-        if (cm->vtx_to_clauses[v].vals[i] == clause_idx) {
-            cm->vtx_to_clauses[v].vals[i] = cm->vtx_to_clauses[v].vals[cm->vtx_to_clauses[v].size-1];
-            cm->vtx_to_clauses[v].size--;
-            return;
-        }
-    }
-}
-
 long process_inconsistent_set(
         struct IntStackWithoutDups *iset,
         struct ListOfClauses *cc,
@@ -570,7 +561,7 @@ long process_inconsistent_set(
             // Remove references to this clause from CM
             for (int j=0; j<cc->clause[c_idx].vv.size; j++) {
                 int v = cc->clause[c_idx].vv.vals[j];
-                remove_clause_membership(cm, v, c_idx);
+                remove_from_clause_membership(v, c_idx, cm);
             }
         }
     }

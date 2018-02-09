@@ -555,11 +555,12 @@ long process_inconsistent_set(
     }
     for (int i=0; i<iset->size; i++) {
         int c_idx = iset->vals[i];
-        cc->clause[c_idx].remaining_wt -= min_wt;
-        if (cc->clause[c_idx].remaining_wt == 0) {
+        struct Clause *c = &cc->clause[c_idx];
+        c->remaining_wt -= min_wt;
+        if (c->remaining_wt == 0) {
             // Remove references to this clause from CM
-            for (int j=0; j<cc->clause[c_idx].vv.size; j++) {
-                int v = cc->clause[c_idx].vv.vals[j];
+            for (int j=0; j<c->vv.size; j++) {
+                int v = c->vv.vals[j];
                 remove_from_clause_membership(v, c_idx, cm);
             }
         }

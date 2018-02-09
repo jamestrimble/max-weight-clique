@@ -541,9 +541,10 @@ long process_inconsistent_set(
 {
     assert(iset->size > 0);
 
-    long min_wt = LONG_MAX;
-    int max_idx = -1;
-    for (int i=0; i<iset->size; i++) {
+    // find max index and min remaining weight
+    int max_idx = iset->vals[0];
+    long min_wt = cc->clause[max_idx].remaining_wt;
+    for (int i=1; i<iset->size; i++) {
         int c_idx = iset->vals[i];
         long wt = cc->clause[c_idx].remaining_wt;
         if (wt < min_wt)
@@ -551,6 +552,7 @@ long process_inconsistent_set(
         if (c_idx > max_idx)
             max_idx = c_idx;
     }
+
     for (int i=0; i<iset->size; i++) {
         int c_idx = iset->vals[i];
         struct Clause *c = &cc->clause[c_idx];

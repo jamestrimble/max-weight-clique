@@ -541,8 +541,7 @@ long process_inconsistent_set(
         struct ListOfClauses *cc,
         struct ClauseMembership *cm)
 {
-    if (iset->size == 0)
-        return 0;
+    assert(iset->size > 0);
 
     long min_wt = LONG_MAX;
     int max_idx = -1;

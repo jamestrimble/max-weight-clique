@@ -321,11 +321,7 @@ struct PreAlloc
 
     unsigned long long *candidates;
 
-    unsigned long long *tmp_bitset;
-
     long *residual_wt;
-
-    int *sorted_vv;
 
     struct IntVec unit_clause_indices;
 
@@ -355,9 +351,7 @@ void init_PreAlloc(struct PreAlloc *pre_alloc, int n)
     pre_alloc->unit_clause_vv_bitset = malloc((n+BITS_PER_WORD-1)/BITS_PER_WORD * sizeof *pre_alloc->unit_clause_vv_bitset);
     pre_alloc->to_colour = malloc((n+BITS_PER_WORD-1)/BITS_PER_WORD * sizeof *pre_alloc->to_colour);
     pre_alloc->candidates = malloc((n+BITS_PER_WORD-1)/BITS_PER_WORD * sizeof *pre_alloc->candidates);
-    pre_alloc->tmp_bitset = malloc((n+BITS_PER_WORD-1)/BITS_PER_WORD * sizeof *pre_alloc->tmp_bitset);
     pre_alloc->residual_wt = malloc(n * sizeof *pre_alloc->residual_wt);
-    pre_alloc->sorted_vv = malloc(n * sizeof *pre_alloc->sorted_vv);
     init_IntVec(&pre_alloc->unit_clause_indices);
     init_IntStack(&pre_alloc->S, n);
     init_IntStackWithoutDups(&pre_alloc->I, n);
@@ -381,9 +375,7 @@ void destroy_PreAlloc(struct PreAlloc *pre_alloc)
     free(pre_alloc->unit_clause_vv_bitset);
     free(pre_alloc->to_colour);
     free(pre_alloc->candidates);
-    free(pre_alloc->tmp_bitset);
     free(pre_alloc->residual_wt);
-    free(pre_alloc->sorted_vv);
     destroy_IntVec(&pre_alloc->unit_clause_indices);
     destroy_IntStack(&pre_alloc->S);
     destroy_IntStackWithoutDups(&pre_alloc->I);

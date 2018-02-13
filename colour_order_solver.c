@@ -222,7 +222,6 @@ struct Clause {
     struct IntVec vv;
     long weight;
     long remaining_wt;
-//    int remaining_vv_count;
 };
 
 struct ListOfClauses {

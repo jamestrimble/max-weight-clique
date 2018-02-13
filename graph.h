@@ -19,6 +19,7 @@ void destroy_IntArray(struct IntArray *vec);
 struct Graph
 {
     int n;
+    int numwords;
     int *degree;
     long *weighted_deg;
     long *weight;

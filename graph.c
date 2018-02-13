@@ -80,6 +80,7 @@ struct Graph *new_graph(int n)
 {
     struct Graph *g = calloc(1, sizeof(*g));
     g->n = n;
+    g->numwords = (n+BITS_PER_WORD-1)/BITS_PER_WORD;
     g->degree = calloc(n, sizeof(*g->degree));
     g->weight = calloc(n, sizeof(*g->weight));
     g->weighted_deg = calloc(n, sizeof(*g->weighted_deg));

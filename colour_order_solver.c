@@ -70,6 +70,28 @@ int first_set_bit(unsigned long long *bitset,
     return -1;
 }
 
+bool have_non_empty_intersection(unsigned long long *bitset1,
+                                     unsigned long long *bitset2,
+                                     int num_words)
+{
+    for (int i=0; i<num_words; i++)
+        if (bitset1[i] & bitset2[i])
+            return true;
+    return false;
+}
+
+int first_nonzero_in_intersection(unsigned long long *bitset1,
+                                     unsigned long long *bitset2,
+                                     int num_words)
+{
+    for (int i=0; i<num_words; i++) {
+        unsigned long long word_intersection = bitset1[i] & bitset2[i];
+        if (word_intersection)
+            return i*BITS_PER_WORD + __builtin_ctzll(word_intersection);
+    }
+    return -1;
+}
+
 void bitset_intersect_with(unsigned long long *bitset,
                                      unsigned long long *adj,
                                      int num_words)
@@ -305,6 +327,9 @@ struct PreAlloc
 {
     bool *not_useful;
 
+    int *clause_to_unique_remaining_vtx;
+    int *unique_remaining_vtx_to_clause;
+
     // in unit_propagate_once, each vertex that does not appear in any clause
     // has -2 as its reason.  Every other vertex has a clause index as its reason,
     // or -1 if the vertex does not have a reason
@@ -326,6 +351,8 @@ struct PreAlloc
     int *last_clause;
 
     int *col_class;     // used in simple_colouring_bound()
+
+    unsigned long long *unit_clause_vv_bitset;
 
     unsigned long long *to_colour;
 
@@ -353,6 +380,8 @@ struct PreAlloc
 void init_PreAlloc(struct PreAlloc *pre_alloc, int n)
 {
     pre_alloc->not_useful = malloc(n * sizeof(*pre_alloc->not_useful));
+    pre_alloc->clause_to_unique_remaining_vtx = malloc(n * sizeof(*pre_alloc->clause_to_unique_remaining_vtx));
+    pre_alloc->unique_remaining_vtx_to_clause = malloc(n * sizeof(*pre_alloc->unique_remaining_vtx_to_clause));
     pre_alloc->reason = malloc(n * sizeof(*pre_alloc->reason));
     pre_alloc->reason_template = malloc(n * sizeof(*pre_alloc->reason_template));
     pre_alloc->vertex_has_been_propagated = malloc(n * sizeof(*pre_alloc->vertex_has_been_propagated));
@@ -360,6 +389,7 @@ void init_PreAlloc(struct PreAlloc *pre_alloc, int n)
     pre_alloc->remaining_vv_count = malloc(n * sizeof(*pre_alloc->remaining_vv_count));
     pre_alloc->last_clause = malloc(n * sizeof(*pre_alloc->last_clause));
     pre_alloc->col_class = malloc(n * sizeof(*pre_alloc->col_class));
+    pre_alloc->unit_clause_vv_bitset = malloc((n+BITS_PER_WORD-1)/BITS_PER_WORD * sizeof *pre_alloc->unit_clause_vv_bitset);
     pre_alloc->to_colour = malloc((n+BITS_PER_WORD-1)/BITS_PER_WORD * sizeof *pre_alloc->to_colour);
     pre_alloc->candidates = malloc((n+BITS_PER_WORD-1)/BITS_PER_WORD * sizeof *pre_alloc->candidates);
     pre_alloc->tmp_bitset = malloc((n+BITS_PER_WORD-1)/BITS_PER_WORD * sizeof *pre_alloc->tmp_bitset);
@@ -376,6 +406,8 @@ void init_PreAlloc(struct PreAlloc *pre_alloc, int n)
 void destroy_PreAlloc(struct PreAlloc *pre_alloc)
 {
     free(pre_alloc->not_useful);
+    free(pre_alloc->clause_to_unique_remaining_vtx);
+    free(pre_alloc->unique_remaining_vtx_to_clause);
     free(pre_alloc->reason);
     free(pre_alloc->reason_template);
     free(pre_alloc->vertex_has_been_propagated);
@@ -383,6 +415,7 @@ void destroy_PreAlloc(struct PreAlloc *pre_alloc)
     free(pre_alloc->remaining_vv_count);
     free(pre_alloc->last_clause);
     free(pre_alloc->col_class);
+    free(pre_alloc->unit_clause_vv_bitset);
     free(pre_alloc->to_colour);
     free(pre_alloc->candidates);
     free(pre_alloc->tmp_bitset);
@@ -432,13 +465,18 @@ void create_inconsistent_set(struct PreAlloc *pre_alloc, struct Graph *g, struct
 void unit_propagate_once(struct PreAlloc *pre_alloc, struct Graph *g, struct ListOfClauses *cc,
         struct IntStackWithoutDups *I)
 {
+    memset(pre_alloc->unit_clause_vv_bitset, 0, g->numwords * sizeof(unsigned long long));
+
     clear_IntStack(&pre_alloc->S);
     memcpy(pre_alloc->remaining_vv_count, pre_alloc->vv_count, cc->size * sizeof(int));
 
     for (int i=0; i<pre_alloc->unit_clause_indices.size; i++) {
         int clause_idx = pre_alloc->unit_clause_indices.vals[i];
-        if (cc->clause[clause_idx].remaining_wt)
+        if (cc->clause[clause_idx].remaining_wt) {
             push(&pre_alloc->S, clause_idx);
+            int v = cc->clause[clause_idx].vv.vals[0];
+            pre_alloc->clause_to_unique_remaining_vtx[clause_idx] = v;
+        }
     }
 
     memset(pre_alloc->vertex_has_been_propagated, 0, g->n * sizeof(bool));
@@ -446,9 +484,9 @@ void unit_propagate_once(struct PreAlloc *pre_alloc, struct Graph *g, struct Lis
 
     while (pre_alloc->S.size) {
         int u_idx = pop(&pre_alloc->S);
-        struct Clause *u = &cc->clause[u_idx];
+//        struct Clause *u = &cc->clause[u_idx];
         assert (pre_alloc->remaining_vv_count[u_idx]/*u->remaining_vv_count*/ == 1);
-        int v = get_unique_remaining_vtx(u, pre_alloc->reason);
+        int v = pre_alloc->clause_to_unique_remaining_vtx[u_idx];
         if (!pre_alloc->vertex_has_been_propagated[v]) {
             for (int i=g->nonadjlists[v].size; i--; ) {
                 int w = g->nonadjlists[v].vals[i];
@@ -457,8 +495,25 @@ void unit_propagate_once(struct PreAlloc *pre_alloc, struct Graph *g, struct Lis
                     for (int j=0; j<pre_alloc->cm.vtx_to_clauses[w].size; j++) {
                         int c_idx = pre_alloc->cm.vtx_to_clauses[w].vals[j];
                         pre_alloc->remaining_vv_count[c_idx]--;
-                        push_if(&pre_alloc->S, c_idx, pre_alloc->remaining_vv_count[c_idx]==1);
-                        if (pre_alloc->remaining_vv_count[c_idx]==0) {
+                        switch(pre_alloc->remaining_vv_count[c_idx]) {
+                        case 1:
+                            {
+                                int x = get_unique_remaining_vtx(&pre_alloc->cc.clause[c_idx], pre_alloc->reason);
+                                if (have_non_empty_intersection(pre_alloc->unit_clause_vv_bitset, g->bit_complement_nd[x], g->numwords)) {
+                                    int y = first_nonzero_in_intersection(pre_alloc->unit_clause_vv_bitset, g->bit_complement_nd[x], g->numwords);
+                                    assert(y != -1);
+                                    int d_idx = pre_alloc->unique_remaining_vtx_to_clause[y];
+                                    pre_alloc->reason[y] = c_idx;
+                                    create_inconsistent_set(pre_alloc, g, I, d_idx, cc, pre_alloc->reason);
+                                    return;
+                                }
+                                push(&pre_alloc->S, c_idx);
+                                pre_alloc->clause_to_unique_remaining_vtx[c_idx] = x;
+                                pre_alloc->unique_remaining_vtx_to_clause[x] = c_idx;
+                                set_bit(pre_alloc->unit_clause_vv_bitset, x);
+                                break;
+                            }
+                        case 0:
                             create_inconsistent_set(pre_alloc, g, I, c_idx, cc, pre_alloc->reason);
                             return;
                         }
@@ -752,10 +807,9 @@ int calc_numwords(unsigned long long *P_bitset, int graph_num_words)
 }
 
 bool colouring_bound(struct PreAlloc *pre_alloc, struct Graph *g, struct UnweightedVtxList *P,
-        unsigned long long *P_bitset, int graph_num_words,
-        long *cumulative_wt_bound, long target, struct Params *params)
+        unsigned long long *P_bitset, long *cumulative_wt_bound, long target, struct Params *params)
 {
-    int numwords = calc_numwords(P_bitset, graph_num_words);
+    int numwords = calc_numwords(P_bitset, g->numwords);
     if (numwords == 0)
         return false;
 
@@ -815,10 +869,9 @@ bool colouring_bound(struct PreAlloc *pre_alloc, struct Graph *g, struct Unweigh
 }
 
 bool simple_colouring_bound(struct PreAlloc *pre_alloc, struct Graph *g, struct UnweightedVtxList *P,
-        unsigned long long *P_bitset, int graph_num_words,
-        long *cumulative_wt_bound, long target, struct Params *params)
+        unsigned long long *P_bitset, long *cumulative_wt_bound, long target, struct Params *params)
 {
-    int numwords = calc_numwords(P_bitset, graph_num_words);
+    int numwords = calc_numwords(P_bitset, g->numwords);
     if (numwords == 0)
         return false;
 
@@ -859,14 +912,14 @@ bool simple_colouring_bound(struct PreAlloc *pre_alloc, struct Graph *g, struct 
 }
 
 void expand(struct PreAlloc *pre_alloc, struct Graph *g, struct VtxList *C, unsigned long long *P_bitset,
-        int numwords, struct VtxList *incumbent, long *expand_call_count, struct Params *params)
+        struct VtxList *incumbent, long *expand_call_count, struct Params *params)
 {
     (*expand_call_count)++;
     if (*expand_call_count % 100000 == 0)
         check_for_timeout();
     if (is_timeout_flag_set()) return;
 
-    if (bitset_empty(P_bitset, numwords) && C->total_wt>incumbent->total_wt) {
+    if (bitset_empty(P_bitset, g->numwords) && C->total_wt>incumbent->total_wt) {
         copy_VtxList(C, incumbent);
         if (!params->quiet)
             printf("New incumbent of weight %ld\n", incumbent->total_wt);
@@ -878,19 +931,19 @@ void expand(struct PreAlloc *pre_alloc, struct Graph *g, struct VtxList *C, unsi
 
     if (params->max_sat_level ?
                 colouring_bound(
-                        pre_alloc, g, &P, P_bitset, numwords, cumulative_wt_bound, incumbent->total_wt - C->total_wt, params) :
+                        pre_alloc, g, &P, P_bitset, cumulative_wt_bound, incumbent->total_wt - C->total_wt, params) :
                 simple_colouring_bound(
-                        pre_alloc, g, &P, P_bitset, numwords, cumulative_wt_bound, incumbent->total_wt - C->total_wt, params)) {
+                        pre_alloc, g, &P, P_bitset, cumulative_wt_bound, incumbent->total_wt - C->total_wt, params)) {
 
-        unsigned long long *new_P_bitset = malloc(numwords * sizeof(unsigned long long));
+        unsigned long long *new_P_bitset = malloc(g->numwords * sizeof(unsigned long long));
         for (int i=P.size-1; i>=0 && C->total_wt+cumulative_wt_bound[i]>incumbent->total_wt; i--) {
             int v = P.vv[i];
 
             unset_bit(P_bitset, v);
-            bitset_intersection_with_complement(P_bitset, g->bit_complement_nd[v], new_P_bitset, numwords);
+            bitset_intersection_with_complement(P_bitset, g->bit_complement_nd[v], new_P_bitset, g->numwords);
 
             vtxlist_push_vtx(g, C, v);
-            expand(pre_alloc, g, C, new_P_bitset, numwords, incumbent, expand_call_count, params);
+            expand(pre_alloc, g, C, new_P_bitset, incumbent, expand_call_count, params);
             vtxlist_pop_vtx(g, C);
         }
         free(new_P_bitset);
@@ -926,8 +979,7 @@ void mc(struct Graph* g, long *expand_call_count, struct Params params, struct V
     }
     /////////////
 
-    int numwords = (ordered_graph->n+BITS_PER_WORD-1)/BITS_PER_WORD;
-    unsigned long long *P_bitset = calloc(numwords, sizeof(unsigned long long));
+    unsigned long long *P_bitset = calloc(g->numwords, sizeof(unsigned long long));
     for (int v=0; v<ordered_graph->n; v++) set_bit(P_bitset, v);
     struct VtxList C;
     init_VtxList(&C, ordered_graph->n);
@@ -935,7 +987,7 @@ void mc(struct Graph* g, long *expand_call_count, struct Params params, struct V
     struct PreAlloc pre_alloc;
     init_PreAlloc(&pre_alloc, g->n);
 
-    expand(&pre_alloc, ordered_graph, &C, P_bitset, numwords, incumbent, expand_call_count, &params);
+    expand(&pre_alloc, ordered_graph, &C, P_bitset, incumbent, expand_call_count, &params);
 
     destroy_PreAlloc(&pre_alloc);
 

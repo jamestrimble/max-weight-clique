@@ -305,8 +305,15 @@ struct PreAlloc
 {
     bool *not_useful;
 
-    // in unit_propagate_once, each vertex has a clause index as its reason, or -1
+    // in unit_propagate_once, each vertex that does not appear in any clause
+    // has -2 as its reason.  Every other vertex has a clause index as its reason,
+    // or -1 if the vertex does not have a reason
     int *reason;
+    
+    // this contains -2 for each vertex that does not appear in any clause,
+    // and -1 for each vertex that appears in at least one clause.  It is used
+    // to initialise reason at the start of unit_propagate_once()
+    int *reason_template;
 
     // used in unit_propagate_once
     bool *vertex_has_been_propagated;
@@ -347,6 +354,7 @@ void init_PreAlloc(struct PreAlloc *pre_alloc, int n)
 {
     pre_alloc->not_useful = malloc(n * sizeof(*pre_alloc->not_useful));
     pre_alloc->reason = malloc(n * sizeof(*pre_alloc->reason));
+    pre_alloc->reason_template = malloc(n * sizeof(*pre_alloc->reason_template));
     pre_alloc->vertex_has_been_propagated = malloc(n * sizeof(*pre_alloc->vertex_has_been_propagated));
     pre_alloc->vv_count = malloc(n * sizeof(*pre_alloc->vv_count));
     pre_alloc->remaining_vv_count = malloc(n * sizeof(*pre_alloc->remaining_vv_count));
@@ -369,6 +377,7 @@ void destroy_PreAlloc(struct PreAlloc *pre_alloc)
 {
     free(pre_alloc->not_useful);
     free(pre_alloc->reason);
+    free(pre_alloc->reason_template);
     free(pre_alloc->vertex_has_been_propagated);
     free(pre_alloc->vv_count);
     free(pre_alloc->remaining_vv_count);
@@ -432,10 +441,8 @@ void unit_propagate_once(struct PreAlloc *pre_alloc, struct Graph *g, struct Lis
             push(&pre_alloc->S, clause_idx);
     }
 
-    // set reason array to -1 and vertex_has_been_propagated array to 0
-    _Static_assert(-1==~0, "Unable to set an array of ints to -1 using memset");
-    memset(pre_alloc->reason, -1, g->n * sizeof(int));
     memset(pre_alloc->vertex_has_been_propagated, 0, g->n * sizeof(bool));
+    memcpy(pre_alloc->reason, pre_alloc->reason_template, g->n * sizeof(int));
 
     while (pre_alloc->S.size) {
         int u_idx = pop(&pre_alloc->S);
@@ -445,10 +452,9 @@ void unit_propagate_once(struct PreAlloc *pre_alloc, struct Graph *g, struct Lis
         if (!pre_alloc->vertex_has_been_propagated[v]) {
             for (int i=g->nonadjlists[v].size; i--; ) {
                 int w = g->nonadjlists[v].vals[i];
-                int sz = pre_alloc->cm.vtx_to_clauses[w].size;
-                if (sz != 0 && pre_alloc->reason[w] == -1) {
+                if (pre_alloc->reason[w] == -1) {
                     pre_alloc->reason[w] = u_idx;
-                    for (int j=0; j<sz; j++) {
+                    for (int j=0; j<pre_alloc->cm.vtx_to_clauses[w].size; j++) {
                         int c_idx = pre_alloc->cm.vtx_to_clauses[w].vals[j];
                         pre_alloc->remaining_vv_count[c_idx]--;
                         push_if(&pre_alloc->S, c_idx, pre_alloc->remaining_vv_count[c_idx]==1);
@@ -466,7 +472,8 @@ void unit_propagate_once(struct PreAlloc *pre_alloc, struct Graph *g, struct Lis
 
 // Note: this swaps the vertex to the end of its list, so that it can be
 // re-added to the lists if necessary
-void remove_from_clause_membership(int v, int clause_idx, struct ClauseMembership *cm)
+void remove_from_clause_membership(int v, int clause_idx, struct ClauseMembership *cm,
+        struct PreAlloc *pre_alloc)
 {
     struct IntVec *cm_v = &cm->vtx_to_clauses[v];
     int i = 0;
@@ -476,6 +483,9 @@ void remove_from_clause_membership(int v, int clause_idx, struct ClauseMembershi
     cm_v->vals[i] = cm_v->vals[cm_v->size-1];
     cm_v->vals[cm_v->size-1] = clause_idx;
     cm_v->size--;
+    if (cm_v->size == 0) {
+        pre_alloc->reason_template[v] = -2;
+    }
 }
 
 void fake_length_one_clause(struct Clause *clause, int clause_idx, int vtx_pos,
@@ -485,7 +495,7 @@ void fake_length_one_clause(struct Clause *clause, int clause_idx, int vtx_pos,
     clause->vv.vals[0] = tmp;
     for (int i=1; i<clause->vv.size; i++) {
         int v = clause->vv.vals[i];
-        remove_from_clause_membership(v, clause_idx, &pre_alloc->cm);
+        remove_from_clause_membership(v, clause_idx, &pre_alloc->cm, pre_alloc);
     }
     clause->vv.size = 1;
     pre_alloc->vv_count[clause_idx] = 1;
@@ -498,6 +508,9 @@ void unfake_length_one_clause(struct Clause *clause, int clause_idx, int vtx_pos
     for (int i=1; i<clause_len; i++) {
         int v = clause->vv.vals[i];
         pre_alloc->cm.vtx_to_clauses[v].vals[pre_alloc->cm.vtx_to_clauses[v].size++] = clause_idx;
+        if (pre_alloc->cm.vtx_to_clauses[v].size == 1) {
+            pre_alloc->reason_template[v] = -1;
+        }
     }
     int tmp = clause->vv.vals[vtx_pos];
     clause->vv.vals[vtx_pos] = clause->vv.vals[0];
@@ -532,7 +545,8 @@ bool look_for_iset_using_non_unit_clause(
 long process_inconsistent_set(
         struct IntStackWithoutDups *iset,
         struct ListOfClauses *cc,
-        struct ClauseMembership *cm)
+        struct ClauseMembership *cm,
+        struct PreAlloc *pre_alloc)
 {
     assert(iset->size > 0);
 
@@ -556,7 +570,7 @@ long process_inconsistent_set(
             // Remove references to this clause from CM
             for (int j=0; j<c->vv.size; j++) {
                 int v = c->vv.vals[j];
-                remove_from_clause_membership(v, c_idx, cm);
+                remove_from_clause_membership(v, c_idx, cm, pre_alloc);
             }
         }
     }
@@ -592,6 +606,11 @@ long unit_propagate(struct PreAlloc *pre_alloc, struct Graph *g, struct ListOfCl
         }
     }
 
+    _Static_assert(-1==~0, "Unable to set an array of ints to -1 using memset");
+    memset(pre_alloc->reason_template, -1, g->n * sizeof(int));
+    for (int v=0; v<g->n; v++)
+        pre_alloc->reason_template[v] -= (pre_alloc->cm.vtx_to_clauses[v].size == 0);
+
     clear_IntVec(&pre_alloc->unit_clause_indices);
     for (int i=0; i<cc->size; i++) {
         cc->clause[i].remaining_wt = cc->clause[i].weight;
@@ -612,7 +631,7 @@ long unit_propagate(struct PreAlloc *pre_alloc, struct Graph *g, struct ListOfCl
         if (pre_alloc->I.size==0)
             break;
 
-        improvement += process_inconsistent_set(&pre_alloc->I, cc, &pre_alloc->cm);
+        improvement += process_inconsistent_set(&pre_alloc->I, cc, &pre_alloc->cm, pre_alloc);
 #ifdef VERY_VERBOSE
         printf("%s[", sep);
         sep = ", ";
@@ -674,7 +693,7 @@ long unit_propagate(struct PreAlloc *pre_alloc, struct Graph *g, struct ListOfCl
                 }
                 printf("]");
 #endif
-                improvement += process_inconsistent_set(&pre_alloc->iset, cc, &pre_alloc->cm);
+                improvement += process_inconsistent_set(&pre_alloc->iset, cc, &pre_alloc->cm, pre_alloc);
 
                 if (improvement >= target_reduction)
                     return improvement;

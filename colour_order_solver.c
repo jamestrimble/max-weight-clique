@@ -917,7 +917,7 @@ void expand(struct PreAlloc *pre_alloc, struct Graph *g, struct VtxList *C, unsi
         struct VtxList *incumbent, long *expand_call_count, struct Params *params)
 {
     (*expand_call_count)++;
-    if (*expand_call_count % 100000 == 0)
+    if (*expand_call_count % 1000 == 0)
         check_for_timeout();
     if (is_timeout_flag_set()) return;
 

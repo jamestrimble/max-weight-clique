@@ -736,10 +736,13 @@ void try_to_enlarge_clause(struct Graph *g, struct Clause *clause, struct PreAll
         unsigned long long *candidates)
 {
     int vv_len = 0;
-    int w;
-    while ((w=first_set_bit(candidates, numwords))!=-1) {
-        unset_bit(candidates, w);
-        pre_alloc->vv[vv_len++] = w;
+    for (int i=0; i<numwords; i++) {
+        unsigned long long word = candidates[i];
+        while (word) {
+            int bit = __builtin_ctzll(word);
+            word ^= (1ull << bit);
+            pre_alloc->vv[vv_len++] = i*BITS_PER_WORD + bit;
+        }
     }
 
 // TODO: check if it works as well to just do:

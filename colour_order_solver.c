@@ -71,6 +71,15 @@ int first_nonzero_in_intersection(unsigned long long *bitset1,
     return -1;
 }
 
+void bitset_intersection(unsigned long long *src1,
+                                     unsigned long long *src2,
+                                     unsigned long long *dst,
+                                     int num_words)
+{
+    for (int i=0; i<num_words; i++)
+        dst[i] = src1[i] & src2[i];
+}
+
 void bitset_intersect_with(unsigned long long *bitset,
                                      unsigned long long *adj,
                                      int num_words)
@@ -321,7 +330,7 @@ struct PreAlloc
 
     unsigned long long *to_colour;
 
-    unsigned long long *candidates;
+    unsigned long long *candidates[2];
 
     long *residual_wt;
 
@@ -353,7 +362,8 @@ void init_PreAlloc(struct PreAlloc *pre_alloc, int n)
     pre_alloc->col_class = malloc(n * sizeof(*pre_alloc->col_class));
     pre_alloc->unit_clause_vv_bitset = malloc((n+BITS_PER_WORD-1)/BITS_PER_WORD * sizeof *pre_alloc->unit_clause_vv_bitset);
     pre_alloc->to_colour = malloc((n+BITS_PER_WORD-1)/BITS_PER_WORD * sizeof *pre_alloc->to_colour);
-    pre_alloc->candidates = malloc((n+BITS_PER_WORD-1)/BITS_PER_WORD * sizeof *pre_alloc->candidates);
+    for (int i=0; i<2; i++)
+        pre_alloc->candidates[i] = malloc((n+BITS_PER_WORD-1)/BITS_PER_WORD * sizeof *pre_alloc->candidates[i]);
     pre_alloc->residual_wt = malloc(n * sizeof *pre_alloc->residual_wt);
     init_IntVec(&pre_alloc->unit_clause_indices);
     init_IntStack(&pre_alloc->S, n);
@@ -378,7 +388,8 @@ void destroy_PreAlloc(struct PreAlloc *pre_alloc)
     free(pre_alloc->col_class);
     free(pre_alloc->unit_clause_vv_bitset);
     free(pre_alloc->to_colour);
-    free(pre_alloc->candidates);
+    for (int i=0; i<2; i++)
+        free(pre_alloc->candidates[i]);
     free(pre_alloc->residual_wt);
     destroy_IntVec(&pre_alloc->unit_clause_indices);
     destroy_IntStack(&pre_alloc->S);
@@ -721,16 +732,13 @@ long unit_propagate(struct PreAlloc *pre_alloc, struct Graph *g, struct ListOfCl
     return improvement;
 }
 
-void try_to_enlarge_clause(struct Graph *g, struct Clause *clause, struct PreAlloc *pre_alloc, int numwords)
+void try_to_enlarge_clause(struct Graph *g, struct Clause *clause, struct PreAlloc *pre_alloc, int numwords,
+        unsigned long long *candidates)
 {
-    copy_bitset(pre_alloc->to_colour, pre_alloc->candidates, numwords);
-    for (int i=0; i<clause->vv.size-1; i++)
-        bitset_intersect_with(pre_alloc->candidates, g->bit_complement_nd[clause->vv.vals[i]], numwords);
-
     int vv_len = 0;
     int w;
-    while ((w=first_set_bit(pre_alloc->candidates, numwords))!=-1) {
-        unset_bit(pre_alloc->candidates, w);
+    while ((w=first_set_bit(candidates, numwords))!=-1) {
+        unset_bit(candidates, w);
         pre_alloc->vv[vv_len++] = w;
     }
 
@@ -760,20 +768,26 @@ long do_colouring_without_reordering(struct PreAlloc *pre_alloc, struct Graph *g
 {
     long bound = 0;
     int v;
+    int w = 0;
     while ((v=first_set_bit(pre_alloc->to_colour, numwords))!=-1) {
-        copy_bitset(pre_alloc->to_colour, pre_alloc->candidates, numwords);
+        int i = 0;
+        copy_bitset(pre_alloc->to_colour, pre_alloc->candidates[0], numwords);
         unset_bit(pre_alloc->to_colour, v);
         struct Clause *clause = &pre_alloc->cc.clause[pre_alloc->cc.size];
         clause->vv.size = 0;
         push_to_IntVec(&clause->vv, v);
-        bitset_intersect_with(pre_alloc->candidates, g->bit_complement_nd[v], numwords);
-        while ((v=first_set_bit(pre_alloc->candidates, numwords))!=-1) {
+        bitset_intersect_with(pre_alloc->candidates[0], g->bit_complement_nd[v], numwords);
+        while ((v=first_set_bit(pre_alloc->candidates[i], numwords))!=-1) {
             unset_bit(pre_alloc->to_colour, v);
             push_to_IntVec(&clause->vv, v);
-            bitset_intersect_with(pre_alloc->candidates, g->bit_complement_nd[v], numwords);
+            bitset_intersection(pre_alloc->candidates[i], g->bit_complement_nd[v],
+                    pre_alloc->candidates[!i], numwords);
+            i = !i;
+            w = v;
         }
         if (clause->vv.size > 1) {
-            try_to_enlarge_clause(g, clause, pre_alloc, numwords);
+            unset_bit(pre_alloc->candidates[!i], w);
+            try_to_enlarge_clause(g, clause, pre_alloc, numwords, pre_alloc->candidates[!i]);
         }
 
         long class_min_wt = pre_alloc->residual_wt[clause->vv.vals[0]];
@@ -885,18 +899,18 @@ bool simple_colouring_bound(struct PreAlloc *pre_alloc, struct Graph *g, struct 
     long bound = 0;
     int v;
     while ((v=first_set_bit(pre_alloc->to_colour, numwords))!=-1) {
-        copy_bitset(pre_alloc->to_colour, pre_alloc->candidates, numwords);
+        copy_bitset(pre_alloc->to_colour, pre_alloc->candidates[0], numwords);
         long class_min_wt = pre_alloc->residual_wt[v];
         unset_bit(pre_alloc->to_colour, v);
         int col_class_size = 1;
         pre_alloc->col_class[0] = v;
-        bitset_intersect_with(pre_alloc->candidates, g->bit_complement_nd[v], numwords);
-        while ((v=first_set_bit(pre_alloc->candidates, numwords))!=-1) {
+        bitset_intersect_with(pre_alloc->candidates[0], g->bit_complement_nd[v], numwords);
+        while ((v=first_set_bit(pre_alloc->candidates[0], numwords))!=-1) {
             if (pre_alloc->residual_wt[v] < class_min_wt)
                 class_min_wt = pre_alloc->residual_wt[v];
             unset_bit(pre_alloc->to_colour, v);
             pre_alloc->col_class[col_class_size++] = v;
-            bitset_intersect_with(pre_alloc->candidates, g->bit_complement_nd[v], numwords);
+            bitset_intersect_with(pre_alloc->candidates[0], g->bit_complement_nd[v], numwords);
         }
         bound += class_min_wt;
         for (int i=0; i<col_class_size; i++) {

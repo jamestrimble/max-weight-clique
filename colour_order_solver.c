@@ -298,6 +298,7 @@ void destroy_ClauseMembership(struct ClauseMembership *cm)
 struct PreAlloc
 {
     int *vv;
+    int *ww;
 
     bool *not_useful;
 
@@ -350,6 +351,7 @@ struct PreAlloc
 void init_PreAlloc(struct PreAlloc *pre_alloc, int n)
 {
     pre_alloc->vv = malloc(n * sizeof(*pre_alloc->vv));
+    pre_alloc->ww = malloc(n * sizeof(*pre_alloc->ww));
     pre_alloc->not_useful = malloc(n * sizeof(*pre_alloc->not_useful));
     pre_alloc->clause_to_unique_remaining_vtx = malloc(n * sizeof(*pre_alloc->clause_to_unique_remaining_vtx));
     pre_alloc->unique_remaining_vtx_to_clause = malloc(n * sizeof(*pre_alloc->unique_remaining_vtx_to_clause));
@@ -376,6 +378,7 @@ void init_PreAlloc(struct PreAlloc *pre_alloc, int n)
 void destroy_PreAlloc(struct PreAlloc *pre_alloc)
 {
     free(pre_alloc->vv);
+    free(pre_alloc->ww);
     free(pre_alloc->not_useful);
     free(pre_alloc->clause_to_unique_remaining_vtx);
     free(pre_alloc->unique_remaining_vtx_to_clause);
@@ -742,6 +745,33 @@ void try_to_enlarge_clause(struct Graph *g, struct Clause *clause, struct PreAll
             int bit = __builtin_ctzll(word);
             word ^= (1ull << bit);
             pre_alloc->vv[vv_len++] = i*BITS_PER_WORD + bit;
+        }
+    }
+
+    int v[3];
+    for (int i=0; i<vv_len-1; i++) {
+        v[0] = pre_alloc->vv[i];
+        int ww_len = 0;
+        for (int j=i+1; j<vv_len; j++) {
+            int w = pre_alloc->vv[j];
+            if (!g->adjmat[v[0]][w]) {
+                pre_alloc->ww[ww_len++] = w;
+            }
+        }
+        for (int j=0; j<ww_len-1; j++) {
+            v[1] = pre_alloc->ww[j];
+            for (int k=j+1; k<ww_len; k++) {
+                v[2] = pre_alloc->ww[k];
+                if (!g->adjmat[v[1]][v[2]]) {
+                    set_bit(pre_alloc->to_colour, clause->vv.vals[clause->vv.size-1]);
+                    clause->vv.size -= 2;
+                    for (int h=0; h<3; h++) {
+                        unset_bit(pre_alloc->to_colour, v[h]);
+                        push_to_IntVec(&clause->vv, v[h]);
+                    }
+                    return;
+                }
+            }
         }
     }
 

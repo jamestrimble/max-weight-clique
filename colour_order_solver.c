@@ -955,6 +955,13 @@ void expand(struct PreAlloc *pre_alloc, struct Graph *g, struct VtxList *C, unsi
                 simple_colouring_bound(
                         pre_alloc, g, &P, P_bitset, cumulative_wt_bound, incumbent->total_wt - C->total_wt, params)) {
 
+#ifdef PRINT_BOUND_AND_EXIT
+        {
+            printf("%ld\n", cumulative_wt_bound[P.size-1]);
+            exit(0);
+        }
+#endif
+
         unsigned long long *new_P_bitset = malloc(g->numwords * sizeof(unsigned long long));
         for (int i=P.size-1; i>=0 && C->total_wt+cumulative_wt_bound[i]>incumbent->total_wt; i--) {
             int v = P.vv[i];

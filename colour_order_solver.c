@@ -749,7 +749,7 @@ void try_to_enlarge_clause(struct Graph *g, struct Clause *clause, struct PreAll
     }
 
     int v[3];
-    for (int i=0; i<vv_len-1; i++) {
+    for (int i=0; i<vv_len-2; i++) {
         v[0] = pre_alloc->vv[i];
         int ww_len = 0;
         for (int j=i+1; j<vv_len; j++) {
@@ -764,7 +764,7 @@ void try_to_enlarge_clause(struct Graph *g, struct Clause *clause, struct PreAll
                 v[2] = pre_alloc->ww[k];
                 if (!g->adjmat[v[1]][v[2]]) {
                     set_bit(pre_alloc->to_colour, clause->vv.vals[clause->vv.size-1]);
-                    clause->vv.size -= 2;
+                    clause->vv.size--;
                     for (int h=0; h<3; h++) {
                         unset_bit(pre_alloc->to_colour, v[h]);
                         push_to_IntVec(&clause->vv, v[h]);

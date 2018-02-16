@@ -767,19 +767,20 @@ void try_to_enlarge_clause(struct Graph *g, struct Clause *clause, struct PreAll
     }
 }
 
-long do_colouring_without_reordering(struct PreAlloc *pre_alloc, struct Graph *g, int numwords)
+long do_colouring_without_reordering(struct PreAlloc *pre_alloc, struct Graph *g, int numwords,
+        struct Params *params)
 {
     long bound = 0;
     int v;
     int w = 0;
     while ((v=first_set_bit(pre_alloc->to_colour, numwords))!=-1) {
-        int i = 0;
         copy_bitset(pre_alloc->to_colour, pre_alloc->candidates[0], numwords);
         unset_bit(pre_alloc->to_colour, v);
         struct Clause *clause = &pre_alloc->cc.clause[pre_alloc->cc.size];
         clause->vv.size = 0;
         push_to_IntVec(&clause->vv, v);
         bitset_intersect_with(pre_alloc->candidates[0], g->bit_complement_nd[v], numwords);
+        int i = 0;
         while ((v=first_set_bit(pre_alloc->candidates[i], numwords))!=-1) {
             unset_bit(pre_alloc->to_colour, v);
             push_to_IntVec(&clause->vv, v);
@@ -788,7 +789,7 @@ long do_colouring_without_reordering(struct PreAlloc *pre_alloc, struct Graph *g
             i = !i;
             w = v;
         }
-        if (clause->vv.size > 1) {
+        if (params->use_colour_class_expansion && clause->vv.size > 1) {
             unset_bit(pre_alloc->candidates[!i], w);
             try_to_enlarge_clause(g, clause, pre_alloc, numwords, pre_alloc->candidates[!i]);
         }
@@ -838,7 +839,7 @@ bool colouring_bound(struct PreAlloc *pre_alloc, struct Graph *g, struct Unweigh
 
     clear_ListOfClauses(&pre_alloc->cc);
 
-    long bound = do_colouring_without_reordering(pre_alloc, g, numwords);
+    long bound = do_colouring_without_reordering(pre_alloc, g, numwords, params);
 
 #ifdef VERY_VERBOSE
     printf("VERY_VERBOSE {\"clauses\": [");

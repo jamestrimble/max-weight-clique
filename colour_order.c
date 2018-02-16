@@ -17,6 +17,7 @@ static char doc[] = "Find a maximum clique in a graph in DIMACS format";
 static char args_doc[] = "FILENAME";
 static struct argp_option options[] = {
     {"quiet", 'q', 0, 0, "Quiet output"},
+    {"colour-class-expansion", 'c', 0, 0, "Use colour class expansion"},
     {"vtx-ordering", 'o', "ORDER", 0, vertex_order_help},
     {"time-limit", 'l', "LIMIT", 0, "Time limit in seconds"},
     {"max-sat-level", 'm', "LEVEL", 0, "Level of MAXSAT reasoning (0, 1 or 2); default=2"},
@@ -25,6 +26,7 @@ static struct argp_option options[] = {
 
 static struct {
     bool quiet;
+    bool use_colour_class_expansion;
     int vtx_ordering;
     int time_limit;
     int max_sat_level;
@@ -40,6 +42,9 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state) {
     switch (key) {
         case 'q':
             arguments.quiet = true;
+            break;
+        case 'c':
+            arguments.use_colour_class_expansion = true;
             break;
         case 'o':
             arguments.vtx_ordering = atoi(arg);
@@ -73,6 +78,10 @@ int main(int argc, char** argv) {
     set_default_arguments();
     argp_parse(&argp, argc, argv, 0, 0, 0);
 
+    if (arguments.max_sat_level==0 && arguments.use_colour_class_expansion) {
+        fail("The -m0 and -c flags cannot be used together.");
+    }
+
     struct Graph* g = readGraph(arguments.filename);
 
     set_start_time();
@@ -83,7 +92,8 @@ int main(int argc, char** argv) {
     struct Params params = {
         .max_sat_level = arguments.max_sat_level,
         .vtx_ordering = arguments.vtx_ordering,
-        .quiet = arguments.quiet
+        .quiet = arguments.quiet,
+        .use_colour_class_expansion = arguments.use_colour_class_expansion
     };
     mc(g, &expand_call_count, params, &clq);
     long elapsed_msec = get_elapsed_time_msec();

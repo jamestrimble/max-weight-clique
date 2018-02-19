@@ -621,6 +621,17 @@ bool any_vtx_not_useful(struct PreAlloc *pre_alloc, struct Clause *clause)
     return false;
 }
 
+int get_max_clause_size(struct ListOfClauses *cc)
+{
+    int max_size = 0;
+    for (int i=0; i<cc->size; i++) {
+        struct Clause *c = &cc->clause[i];
+        if (c->vv.size > max_size)
+            max_size = c->vv.size;
+    }
+    return max_size;
+}
+
 long unit_propagate(struct PreAlloc *pre_alloc, struct Graph *g, struct ListOfClauses *cc,
         long target_reduction, struct Params *params)
 {
@@ -683,7 +694,7 @@ long unit_propagate(struct PreAlloc *pre_alloc, struct Graph *g, struct ListOfCl
     printf("]}\n");
 #endif
 
-    if (params->max_sat_level == 2) {
+    if (params->max_sat_level != 1) {
         memset(pre_alloc->not_useful, 0, g->n * sizeof(bool));
         for (int i=0; i<cc->size; i++) {
             struct Clause *clause = &cc->clause[i];
@@ -694,42 +705,47 @@ long unit_propagate(struct PreAlloc *pre_alloc, struct Graph *g, struct ListOfCl
         printf("VERY_VERBOSE {\"isets2\": [");
         sep = "";
 #endif
-        for (int i=0; i<cc->size; i++) {
-            struct Clause *clause = &cc->clause[i];
-            if (clause->vv.size != 2)
-                continue;
+        int max_clause_size = params->max_sat_level == -1 ?
+                get_max_clause_size(cc) : params->max_sat_level;
 
-            if (any_vtx_not_useful(pre_alloc, clause))
-                continue;
+        for (int clause_size = 2; clause_size <= max_clause_size; clause_size++) {
+            for (int i=0; i<cc->size; i++) {
+                struct Clause *clause = &cc->clause[i];
+                if (clause->vv.size != clause_size)
+                    continue;
 
-            for (;;) {
-                if (clause->remaining_wt == 0)
-                    break;
+                if (any_vtx_not_useful(pre_alloc, clause))
+                    continue;
 
-                push_to_IntVec(&pre_alloc->unit_clause_indices, i);
+                for (;;) {
+                    if (clause->remaining_wt == 0)
+                        break;
 
-                bool found_iset = look_for_iset_using_non_unit_clause(
-                        pre_alloc, g, clause, i, cc);
+                    push_to_IntVec(&pre_alloc->unit_clause_indices, i);
 
-                pop_from_IntVec(&pre_alloc->unit_clause_indices);
+                    bool found_iset = look_for_iset_using_non_unit_clause(
+                            pre_alloc, g, clause, i, cc);
 
-                if (!found_iset)
-                    break;
+                    pop_from_IntVec(&pre_alloc->unit_clause_indices);
+
+                    if (!found_iset)
+                        break;
 
 #ifdef VERY_VERBOSE
-                printf("%s[", sep);
-                sep = ", ";
-                char *sep2 = "";
-                for (int i=0; i<pre_alloc->iset.size; i++) {
-                    printf("%s%d", sep2, pre_alloc->iset.vals[i]);
-                    sep2 = ", ";
-                }
-                printf("]");
+                    printf("%s[", sep);
+                    sep = ", ";
+                    char *sep2 = "";
+                    for (int i=0; i<pre_alloc->iset.size; i++) {
+                        printf("%s%d", sep2, pre_alloc->iset.vals[i]);
+                        sep2 = ", ";
+                    }
+                    printf("]");
 #endif
-                improvement += process_inconsistent_set(&pre_alloc->iset, cc, &pre_alloc->cm, pre_alloc);
+                    improvement += process_inconsistent_set(&pre_alloc->iset, cc, &pre_alloc->cm, pre_alloc);
 
-                if (improvement >= target_reduction)
-                    return improvement;
+                    if (improvement >= target_reduction)
+                        return improvement;
+                }
             }
         }
 #ifdef VERY_VERBOSE

@@ -20,7 +20,7 @@ static struct argp_option options[] = {
     {"colour-class-expansion", 'c', 0, 0, "Use colour class expansion"},
     {"vtx-ordering", 'o', "ORDER", 0, vertex_order_help},
     {"time-limit", 'l', "LIMIT", 0, "Time limit in seconds"},
-    {"max-sat-level", 'm', "LEVEL", 0, "Level of MAXSAT reasoning (0, 1 or 2); default=2"},
+    {"max-sat-level", 'm', "LEVEL", 0, "Level of MAXSAT reasoning; default=2"},
     { 0 }
 };
 

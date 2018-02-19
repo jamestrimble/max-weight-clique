@@ -332,6 +332,8 @@ struct PreAlloc
 
     unsigned long long *candidates[2];
 
+    unsigned long long **candidates_v2;
+
     long *residual_wt;
 
     struct IntVec unit_clause_indices;
@@ -364,6 +366,9 @@ void init_PreAlloc(struct PreAlloc *pre_alloc, int n)
     pre_alloc->to_colour = malloc((n+BITS_PER_WORD-1)/BITS_PER_WORD * sizeof *pre_alloc->to_colour);
     for (int i=0; i<2; i++)
         pre_alloc->candidates[i] = malloc((n+BITS_PER_WORD-1)/BITS_PER_WORD * sizeof *pre_alloc->candidates[i]);
+    pre_alloc->candidates_v2 = malloc(n * sizeof(*pre_alloc->candidates_v2));
+    for (int i=0; i<n; i++)
+        pre_alloc->candidates_v2[i] = malloc((n+BITS_PER_WORD-1)/BITS_PER_WORD * sizeof *pre_alloc->candidates[i]);
     pre_alloc->residual_wt = malloc(n * sizeof *pre_alloc->residual_wt);
     init_IntVec(&pre_alloc->unit_clause_indices);
     init_IntStack(&pre_alloc->S, n);
@@ -373,7 +378,7 @@ void init_PreAlloc(struct PreAlloc *pre_alloc, int n)
     init_ClauseMembership(&pre_alloc->cm, n);
 }
 
-void destroy_PreAlloc(struct PreAlloc *pre_alloc)
+void destroy_PreAlloc(struct PreAlloc *pre_alloc, int n)
 {
     free(pre_alloc->vv);
     free(pre_alloc->not_useful);
@@ -390,6 +395,9 @@ void destroy_PreAlloc(struct PreAlloc *pre_alloc)
     free(pre_alloc->to_colour);
     for (int i=0; i<2; i++)
         free(pre_alloc->candidates[i]);
+    for (int i=0; i<n; i++)
+        free(pre_alloc->candidates_v2[i]);
+    free(pre_alloc->candidates_v2);
     free(pre_alloc->residual_wt);
     destroy_IntVec(&pre_alloc->unit_clause_indices);
     destroy_IntStack(&pre_alloc->S);
@@ -931,6 +939,72 @@ bool simple_colouring_bound(struct PreAlloc *pre_alloc, struct Graph *g, struct 
     return bound > target;
 }
 
+bool simple_colouring_bound_v2(struct PreAlloc *pre_alloc, struct Graph *g, struct UnweightedVtxList *P,
+        unsigned long long *P_bitset, long *cumulative_wt_bound, long target, struct Params *params)
+{
+    int numwords = calc_numwords(P_bitset, g->numwords);
+    if (numwords == 0)
+        return false;
+
+    copy_bitset(P_bitset, pre_alloc->to_colour, numwords);
+
+    memcpy(pre_alloc->residual_wt, g->weight, g->n * sizeof(*pre_alloc->residual_wt));
+
+    P->size = 0;
+    long bound = 0;
+    int v;
+    int j = 0;  //index of first vertex of minimum weight in colour class
+    copy_bitset(pre_alloc->to_colour, pre_alloc->candidates_v2[0], numwords);
+    for (;;) {
+        long class_min_wt;
+        int col_class_size;
+        if (j > 0) {
+            col_class_size = j;
+            class_min_wt = pre_alloc->residual_wt[pre_alloc->col_class[0]];
+            j = 0;
+            for (int i=1; i<col_class_size; i++) {
+                int w = pre_alloc->col_class[i];
+                long wt = pre_alloc->residual_wt[w];
+                if (wt < class_min_wt) {
+                    class_min_wt = wt;
+                    j = i;
+                }
+            }
+        } else {
+            v=first_set_bit(pre_alloc->candidates_v2[0], numwords);
+            if (v == -1)
+                break;
+            class_min_wt = pre_alloc->residual_wt[v];
+            col_class_size = 1;
+            pre_alloc->col_class[0] = v;
+            bitset_intersection(pre_alloc->candidates_v2[0], g->bit_complement_nd[v],
+                    pre_alloc->candidates_v2[1], numwords);
+            j = 0;
+        }
+        while ((v=first_set_bit(pre_alloc->candidates_v2[col_class_size], numwords))!=-1) {
+            if (pre_alloc->residual_wt[v] < class_min_wt) {
+                class_min_wt = pre_alloc->residual_wt[v];
+                j = col_class_size;
+            }
+            bitset_intersection(pre_alloc->candidates_v2[col_class_size], g->bit_complement_nd[v],
+                    pre_alloc->candidates_v2[col_class_size+1], numwords);
+            pre_alloc->col_class[col_class_size++] = v;
+        }
+        bound += class_min_wt;
+        for (int i=0; i<col_class_size; i++) {
+            int w = pre_alloc->col_class[i];
+            pre_alloc->residual_wt[w] -= class_min_wt;
+            if (pre_alloc->residual_wt[w] == 0) {
+                for (int k=0; k<=j; k++)
+                    unset_bit(pre_alloc->candidates_v2[k], w);
+                cumulative_wt_bound[P->size] = bound;
+                P->vv[P->size++] = w;
+            }
+        }
+    }
+    return bound > target;
+}
+
 void expand(struct PreAlloc *pre_alloc, struct Graph *g, struct VtxList *C, unsigned long long *P_bitset,
         struct VtxList *incumbent, long *expand_call_count, struct Params *params)
 {
@@ -1016,7 +1090,7 @@ void mc(struct Graph* g, long *expand_call_count, struct Params params, struct V
 
     expand(&pre_alloc, ordered_graph, &C, P_bitset, incumbent, expand_call_count, &params);
 
-    destroy_PreAlloc(&pre_alloc);
+    destroy_PreAlloc(&pre_alloc, g->n);
 
     destroy_VtxList(&C);
     free(P_bitset);
